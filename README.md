@@ -6,7 +6,7 @@ A modern Swift Bluetooth library providing async/await APIs for CoreBluetooth us
 
 ## Features
 
-- Modern async/await APIs
+- Swift 6 ready strict concurrency async/await APIs
 - MainActor isolation for thread safety
 - Comprehensive timeout support
 - Stream-based monitoring with AsyncStream

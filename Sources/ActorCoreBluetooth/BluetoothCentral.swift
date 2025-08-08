@@ -136,7 +136,6 @@ public final class BluetoothCentral {
                     guard let self else { return }
                     self.logger.centralNotice("Scan completed (timeout reached)", context: ["timeout": timeout])
                     cbCentralManager.stopScan()
-                    scan.resumeOnce(with: .success(self.discoveredPeripherals))
                 }
             }
             
@@ -237,7 +236,6 @@ public final class BluetoothCentral {
                         context: ["peripheralID": peripheral.identifier.uuidString]
                     )
                     cbCentralManager.cancelPeripheralConnection(peripheral.cbPeripheral)
-                    connection.resumeOnce(with: .failure(BluetoothError.connectionTimeout))
                     self?.connectionOperations.removeValue(forKey: peripheral.identifier)
                 }
             }
@@ -706,7 +704,6 @@ public final class BluetoothCentral {
                         context: ["peripheralID": cbPeripheral.identifier.uuidString]
                     )
                     cbCentralManager.cancelPeripheralConnection(cbPeripheral)
-                    connection.resumeOnce(with: .failure(BluetoothError.connectionTimeout))
                     self?.connectionOperations.removeValue(forKey: cbPeripheral.identifier)
                 }
             }

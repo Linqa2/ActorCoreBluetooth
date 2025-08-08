@@ -89,7 +89,6 @@ public final class ConnectedPeripheral {
                         timeout: timeout,
                         context: ["peripheralID": self.identifier.uuidString]
                     )
-                    discovery.resumeOnce(with: .failure(BluetoothError.connectionTimeout))
                     self.serviceDiscoveryOperations.removeValue(forKey: "services")
                 }
             }
@@ -141,7 +140,6 @@ public final class ConnectedPeripheral {
                         timeout: timeout,
                         context: ["serviceUUID": service.uuid]
                     )
-                    discovery.resumeOnce(with: .failure(BluetoothError.connectionTimeout))
                     self.characteristicDiscoveryOperations.removeValue(forKey: key)
                 }
             }
@@ -203,7 +201,6 @@ public final class ConnectedPeripheral {
                         timeout: timeout,
                         context: ["characteristicUUID": characteristic.uuid]
                     )
-                    read.resumeOnce(with: .failure(BluetoothError.connectionTimeout))
                     self.characteristicReadOperations.removeValue(forKey: key)
                 }
             }
@@ -263,7 +260,6 @@ public final class ConnectedPeripheral {
                         timeout: timeout,
                         context: ["characteristicUUID": characteristic.uuid]
                     )
-                    write.resumeOnce(with: .failure(BluetoothError.connectionTimeout))
                     self.characteristicWriteOperations.removeValue(forKey: key)
                 }
             }
@@ -352,7 +348,6 @@ public final class ConnectedPeripheral {
                         timeout: timeout,
                         context: ["characteristicUUID": characteristic.uuid]
                     )
-                    notification.resumeOnce(with: .failure(BluetoothError.connectionTimeout))
                     self.notificationStateOperations.removeValue(forKey: key)
                 }
             }

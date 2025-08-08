@@ -35,7 +35,7 @@ final class TimedOperation<T: Sendable> {
         }
         continuation = nil
         
-        // Cancel any active timeout task
+        // Cancel any active timeout task and clear handler
         task?.cancel()
         task = nil
         
@@ -52,19 +52,37 @@ final class TimedOperation<T: Sendable> {
         }
     }
     
-    func setTimeoutTask(timeout: TimeInterval, onTimeout: @escaping @MainActor () -> Void) {
+    func setTimeoutTask(timeout: TimeInterval, onTimeout: @escaping () -> Void) {
         task?.cancel()
         
         logger.internalDebug("Setting timeout task", context: [
             "operation": operationName,
             "timeout": timeout
         ])
-        
-        task = Task {
+                
+        // Create a weak reference to self to avoid reference cycles
+        task = Task { [weak self, logger, operationName] in
             try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-            if !Task.isCancelled {
+            
+            guard !Task.isCancelled else {
+                logger.internalDebug("Timeout task cancelled", context: ["operation": operationName])
+                return
+            }
+            
+            await MainActor.run {
+                // Only proceed if TimedOperation still exists and has active continuation
+                guard let self = self, self.continuation != nil else {
+                    logger.internalDebug("Timeout occurred but TimedOperation no longer active", context: ["operation": operationName])
+                    return
+                }
+                
                 logger.logTimeout(operation: operationName, timeout: timeout)
+                
+                // Execute the timeout handler
                 onTimeout()
+                
+                // Complete the operation with timeout error
+                self.resumeOnce(with: .failure(BluetoothError.connectionTimeout))
             }
         }
     }
@@ -79,6 +97,10 @@ final class TimedOperation<T: Sendable> {
     
     deinit {
         logger.internalDebug("TimedOperation deallocated", context: ["operation": operationName])
+        
+        // Cancel any active timeout task on deallocation
+        task?.cancel()
+        
         if continuation != nil {
             logger.internalWarning("TimedOperation deallocated with active continuation", context: ["operation": operationName])
         }

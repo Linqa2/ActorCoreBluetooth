@@ -38,7 +38,7 @@ final class TimedOperationTests: XCTestCase {
                 operation.setup(continuation)
                 
                 operation.setTimeoutTask(timeout: 0.1) {
-                    operation.resumeOnce(with: .failure(BluetoothError.connectionTimeout))
+                    print("timed out")
                 }
                 
                 // Don't complete the operation - let it timeout
@@ -82,7 +82,7 @@ final class TimedOperationTests: XCTestCase {
             _ = try await withCheckedThrowingContinuation { continuation in
                 operation.setup(continuation)
                 operation.setTimeoutTask(timeout: 0.1) {
-                    operation.resumeOnce(with: .failure(BluetoothError.connectionTimeout))
+                    print("timed out")
                 }
             }
             
