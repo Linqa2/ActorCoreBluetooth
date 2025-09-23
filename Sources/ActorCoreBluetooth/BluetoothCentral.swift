@@ -11,6 +11,7 @@ import CoreBluetooth
 
 @MainActor
 public final class BluetoothCentral {
+    private static let powerOnWaitAttempts = 50
     
     // Internal CB objects
     private var cbCentralManager: CBCentralManager?
@@ -54,7 +55,7 @@ public final class BluetoothCentral {
         
         // Wait for central manager to be ready
         var attempts = 0
-        while cbCentralManager?.state != .poweredOn && attempts < 50 {
+        while cbCentralManager?.state != .poweredOn && attempts < Self.powerOnWaitAttempts {
             try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
             attempts += 1
             
@@ -62,7 +63,7 @@ public final class BluetoothCentral {
                 logger.internalDebug("CBCentralManager state check", context: [
                     "state": state.rawValue,
                     "attempt": attempts,
-                    "maxAttempts": 50
+                    "maxAttempts": Self.powerOnWaitAttempts
                 ])
                 
                 // Only throw errors for final states, keep waiting for transitional ones

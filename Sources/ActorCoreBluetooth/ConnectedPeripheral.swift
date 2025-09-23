@@ -63,6 +63,15 @@ public final class ConnectedPeripheral {
             throw BluetoothError.peripheralNotConnected
         }
         
+        // Cancel any existing service discovery operation
+        if let existingDiscovery = serviceDiscoveryOperations["services"] {
+            logger.serviceInfo("Canceling previous service discovery to start new one", context: [
+                "peripheralID": identifier.uuidString
+            ])
+            existingDiscovery.resumeOnce(with: .failure(BluetoothError.operationCancelled))
+            serviceDiscoveryOperations.removeValue(forKey: "services")
+        }
+        
         let serviceInfo = serviceUUIDs?.joined(separator: ", ") ?? "all services"
         logger.serviceInfo("Discovering services", context: [
             "services": serviceInfo,
@@ -109,6 +118,18 @@ public final class ConnectedPeripheral {
             throw BluetoothError.peripheralNotConnected
         }
         
+        let key = service.uuid
+        
+        // Cancel any existing characteristic discovery operation for this service
+        if let existingDiscovery = characteristicDiscoveryOperations[key] {
+            logger.characteristicInfo("Canceling previous characteristic discovery to start new one", context: [
+                "serviceUUID": service.uuid,
+                "peripheralID": identifier.uuidString
+            ])
+            existingDiscovery.resumeOnce(with: .failure(BluetoothError.operationCancelled))
+            characteristicDiscoveryOperations.removeValue(forKey: key)
+        }
+        
         let charInfo = characteristicUUIDs?.joined(separator: ", ") ?? "all characteristics"
         logger.characteristicInfo("Discovering characteristics", context: [
             "characteristics": charInfo,
@@ -124,7 +145,6 @@ public final class ConnectedPeripheral {
             )
             discovery.setup(continuation)
             
-            let key = service.uuid
             characteristicDiscoveryOperations[key] = discovery
             
             // Setup timeout if provided
@@ -171,6 +191,18 @@ public final class ConnectedPeripheral {
             throw BluetoothError.operationNotSupported
         }
         
+        let key = characteristic.uuid
+        
+        // Cancel any existing read operation for this characteristic
+        if let existingRead = characteristicReadOperations[key] {
+            logger.characteristicInfo("Canceling previous read operation to start new one", context: [
+                "characteristicUUID": characteristic.uuid,
+                "peripheralID": identifier.uuidString
+            ])
+            existingRead.resumeOnce(with: .failure(BluetoothError.operationCancelled))
+            characteristicReadOperations.removeValue(forKey: key)
+        }
+        
         logger.logCharacteristic(
             operation: "Reading",
             uuid: characteristic.uuid,
@@ -185,7 +217,6 @@ public final class ConnectedPeripheral {
             )
             read.setup(continuation)
             
-            let key = characteristic.uuid
             characteristicReadOperations[key] = read
             
             // Setup timeout if provided
@@ -229,6 +260,18 @@ public final class ConnectedPeripheral {
             throw BluetoothError.operationNotSupported
         }
         
+        let key = characteristic.uuid
+        
+        // Cancel any existing write operation for this characteristic
+        if let existingWrite = characteristicWriteOperations[key] {
+            logger.characteristicInfo("Canceling previous write operation to start new one", context: [
+                "characteristicUUID": characteristic.uuid,
+                "peripheralID": identifier.uuidString
+            ])
+            existingWrite.resumeOnce(with: .failure(BluetoothError.operationCancelled))
+            characteristicWriteOperations.removeValue(forKey: key)
+        }
+        
         logger.logCharacteristic(
             operation: "Writing",
             uuid: characteristic.uuid,
@@ -244,7 +287,6 @@ public final class ConnectedPeripheral {
             )
             write.setup(continuation)
             
-            let key = characteristic.uuid
             characteristicWriteOperations[key] = write
             
             // Setup timeout if provided
@@ -319,6 +361,18 @@ public final class ConnectedPeripheral {
             throw BluetoothError.operationNotSupported
         }
         
+        let key = characteristic.uuid
+        
+        // Cancel any existing notification state operation for this characteristic
+        if let existingNotification = notificationStateOperations[key] {
+            logger.characteristicInfo("Canceling previous notification state operation to start new one", context: [
+                "characteristicUUID": characteristic.uuid,
+                "peripheralID": identifier.uuidString
+            ])
+            existingNotification.resumeOnce(with: .failure(BluetoothError.operationCancelled))
+            notificationStateOperations.removeValue(forKey: key)
+        }
+        
         let operation = enabled ? "Enabling" : "Disabling"
         logger.characteristicInfo("\(operation) notifications", context: [
             "characteristicUUID": characteristic.uuid,
@@ -333,7 +387,6 @@ public final class ConnectedPeripheral {
             )
             notification.setup(continuation)
             
-            let key = characteristic.uuid
             notificationStateOperations[key] = notification
             
             // Setup timeout if provided
