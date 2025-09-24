@@ -26,7 +26,8 @@ public final class ConsoleBluetoothLogger: BluetoothLogger {
             "\(key): \(value)"
         }.joined(separator: ", ") ?? ""
         
-        print("[\(timestamp)] [\(level.rawValue.uppercased())] [\(category.rawValue)] \(message)\(contextString)")
+        let separator = contextString.isEmpty ? "" : " "
+        print("[\(timestamp)] [\(level.rawValue.uppercased())] [\(category.rawValue)] \(message)\(separator)\(contextString)")
     }
 }
 
