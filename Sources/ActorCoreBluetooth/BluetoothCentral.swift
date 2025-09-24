@@ -130,13 +130,19 @@ public final class BluetoothCentral {
             self.scanOperation = scan
             self.discoveredPeripherals = []
             
-            // Setup timeout if provided
+            // Setup timeout if provided - for scanning, timeout returns discovered results instead of throwing
             if let timeout = timeout {
                 logger.internalDebug("Setting scan timeout", context: ["timeout": timeout])
-                scan.setTimeoutTask(timeout: timeout) {[weak self] in
-                    guard let self else { return }
-                    self.logger.centralNotice("Scan completed (timeout reached)", context: ["timeout": timeout])
+                scan.setTimeoutTask(timeout: timeout) { [weak self] () -> [DiscoveredPeripheral] in
+                    guard let self else { return [] }
+                    
+                    self.logger.centralNotice("Scan completed (timeout reached)", context: [
+                        "timeout": timeout,
+                        "discoveredCount": self.discoveredPeripherals.count
+                    ])
+                    
                     cbCentralManager.stopScan()
+                    return self.discoveredPeripherals
                 }
             }
             
@@ -230,7 +236,7 @@ public final class BluetoothCentral {
                     "peripheralID": peripheral.identifier.uuidString,
                     "timeout": timeout
                 ])
-                connection.setTimeoutTask(timeout: timeout) { [weak self] in
+                connection.setTimeoutTask(timeout: timeout) { [weak self] () -> Void in
                     self?.logger.logTimeout(
                         operation: "Connection",
                         timeout: timeout,
@@ -238,6 +244,7 @@ public final class BluetoothCentral {
                     )
                     cbCentralManager.cancelPeripheralConnection(peripheral.cbPeripheral)
                     self?.connectionOperations.removeValue(forKey: peripheral.identifier)
+                    // Throws BluetoothError.connectionTimeout by default
                 }
             }
             
@@ -698,7 +705,7 @@ public final class BluetoothCentral {
                     "peripheralID": cbPeripheral.identifier.uuidString,
                     "timeout": timeout
                 ])
-                connection.setTimeoutTask(timeout: timeout) { [weak self] in
+                connection.setTimeoutTask(timeout: timeout) { [weak self] () -> Void in
                     self?.logger.logTimeout(
                         operation: "Reconnection",
                         timeout: timeout,
@@ -706,6 +713,7 @@ public final class BluetoothCentral {
                     )
                     cbCentralManager.cancelPeripheralConnection(cbPeripheral)
                     self?.connectionOperations.removeValue(forKey: cbPeripheral.identifier)
+                    // Throws BluetoothError.connectionTimeout by default
                 }
             }
             

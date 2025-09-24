@@ -88,18 +88,21 @@ public final class ConnectedPeripheral {
             
             serviceDiscoveryOperations["services"] = discovery
             
-            // Setup timeout if provided
+            // Setup timeout if provided - for discovery, timeout returns partial results instead of throwing
             if let timeout = timeout {
                 logger.internalDebug("Setting service discovery timeout", context: ["timeout": timeout])
-                discovery.setTimeoutTask(timeout: timeout) { [weak self] in
-                    guard let self else { return }
-                    self.logger.logTimeout(
-                        operation: "Service discovery",
-                        timeout: timeout,
-                        context: ["peripheralID": self.identifier.uuidString]
-                    )
+                discovery.setTimeoutTask(timeout: timeout, onTimeoutResult: { [weak self] in
+                    guard let self else { return [] }
+                    
+                    let currentServices = self.cbPeripheral.services?.map { BluetoothService(cbService: $0) } ?? []
+                    self.logger.serviceInfo("Service discovery completed (timeout reached)", context: [
+                        "timeout": timeout,
+                        "peripheralID": self.identifier.uuidString,
+                        "discoveredCount": currentServices.count
+                    ])
                     self.serviceDiscoveryOperations.removeValue(forKey: "services")
-                }
+                    return currentServices
+                })
             }
             
             // Start service discovery
@@ -147,21 +150,24 @@ public final class ConnectedPeripheral {
             
             characteristicDiscoveryOperations[key] = discovery
             
-            // Setup timeout if provided
+            // Setup timeout if provided - for discovery, timeout returns partial results instead of throwing
             if let timeout = timeout {
                 logger.internalDebug("Setting characteristic discovery timeout", context: [
                     "timeout": timeout,
                     "serviceUUID": service.uuid
                 ])
-                discovery.setTimeoutTask(timeout: timeout) {[weak self] in
-                    guard let self else { return }
-                    self.logger.logTimeout(
-                        operation: "Characteristic discovery",
-                        timeout: timeout,
-                        context: ["serviceUUID": service.uuid]
-                    )
+                discovery.setTimeoutTask(timeout: timeout, onTimeoutResult: { [weak self] in
+                    guard let self else { return [] }
+                    
+                    let currentCharacteristics = service.cbService.characteristics?.map { BluetoothCharacteristic(cbCharacteristic: $0) } ?? []
+                    self.logger.characteristicInfo("Characteristic discovery completed (timeout reached)", context: [
+                        "timeout": timeout,
+                        "serviceUUID": service.uuid,
+                        "discoveredCount": currentCharacteristics.count
+                    ])
                     self.characteristicDiscoveryOperations.removeValue(forKey: key)
-                }
+                    return currentCharacteristics
+                })
             }
             
             // Start characteristic discovery
@@ -225,7 +231,7 @@ public final class ConnectedPeripheral {
                     "timeout": timeout,
                     "characteristicUUID": characteristic.uuid
                 ])
-                read.setTimeoutTask(timeout: timeout) { [weak self] in
+                read.setTimeoutTask(timeout: timeout, onTimeout: { [weak self] in
                     guard let self else { return }
                     self.logger.logTimeout(
                         operation: "Read",
@@ -233,7 +239,8 @@ public final class ConnectedPeripheral {
                         context: ["characteristicUUID": characteristic.uuid]
                     )
                     self.characteristicReadOperations.removeValue(forKey: key)
-                }
+                    // Throws BluetoothError.connectionTimeout by default
+                })
             }
             
             // Start read operation
@@ -295,7 +302,7 @@ public final class ConnectedPeripheral {
                     "timeout": timeout,
                     "characteristicUUID": characteristic.uuid
                 ])
-                write.setTimeoutTask(timeout: timeout) { [weak self] in
+                write.setTimeoutTask(timeout: timeout, onTimeout: { [weak self] in
                     guard let self else { return }
                     self.logger.logTimeout(
                         operation: "Write",
@@ -303,7 +310,8 @@ public final class ConnectedPeripheral {
                         context: ["characteristicUUID": characteristic.uuid]
                     )
                     self.characteristicWriteOperations.removeValue(forKey: key)
-                }
+                    // Throws BluetoothError.connectionTimeout by default
+                })
             }
             
             // Start write operation
@@ -394,7 +402,7 @@ public final class ConnectedPeripheral {
                 logger.internalDebug("Setting notification state timeout", context: [
                     "timeout": timeout
                 ])
-                notification.setTimeoutTask(timeout: timeout) { [weak self] in
+                notification.setTimeoutTask(timeout: timeout, onTimeout: { [weak self] in
                     guard let self else { return }
                     self.logger.logTimeout(
                         operation: "Notification state change",
@@ -402,7 +410,8 @@ public final class ConnectedPeripheral {
                         context: ["characteristicUUID": characteristic.uuid]
                     )
                     self.notificationStateOperations.removeValue(forKey: key)
-                }
+                    // Throws BluetoothError.connectionTimeout by default
+                })
             }
             
             // Set notification state

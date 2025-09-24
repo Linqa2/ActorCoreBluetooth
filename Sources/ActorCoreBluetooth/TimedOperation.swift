@@ -53,6 +53,13 @@ final class TimedOperation<T: Sendable> {
     }
     
     func setTimeoutTask(timeout: TimeInterval, onTimeout: @escaping () -> Void) {
+        setTimeoutTask(timeout: timeout, onTimeoutResult: {
+            onTimeout()
+            throw BluetoothError.connectionTimeout
+        })
+    }
+    
+    func setTimeoutTask(timeout: TimeInterval, onTimeoutResult: @escaping () throws -> T) {
         task?.cancel()
         
         logger.internalDebug("Setting timeout task", context: [
@@ -78,11 +85,13 @@ final class TimedOperation<T: Sendable> {
                 
                 logger.logTimeout(operation: operationName, timeout: timeout)
                 
-                // Execute the timeout handler
-                onTimeout()
-                
-                // Complete the operation with timeout error
-                self.resumeOnce(with: .failure(BluetoothError.connectionTimeout))
+                // Execute the timeout handler and get result
+                do {
+                    let result = try onTimeoutResult()
+                    self.resumeOnce(with: .success(result))
+                } catch {
+                    self.resumeOnce(with: .failure(error))
+                }
             }
         }
     }
