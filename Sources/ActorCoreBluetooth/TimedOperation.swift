@@ -14,37 +14,36 @@ final class TimedOperation<T: Sendable> {
     private var continuation: CheckedContinuation<T, Error>?
     private var task: Task<Void, Never>?
     private let operationName: String
-    private let logger: BluetoothLogger
+    private let logger: BluetoothLogger?
     
-    init(operationName: String = "Unknown", logger: BluetoothLogger) {
+    init(operationName: String = "Unknown", logger: BluetoothLogger?) {
         self.operationName = operationName
         self.logger = logger
-        logger.internalDebug("TimedOperation created", context: ["operation": operationName])
+        logger?.internalDebug("TimedOperation created", context: ["operation": operationName])
     }
     
     func setup(_ cont: CheckedContinuation<T, Error>) {
         assert(continuation == nil, "Double continuation set for \(operationName)!")
-        logger.internalDebug("Continuation set", context: ["operation": operationName])
+        logger?.internalDebug("Continuation set", context: ["operation": operationName])
         continuation = cont
     }
     
     func resumeOnce(with result: Result<T, Error>) {
         guard let cont = continuation else {
-            logger.internalWarning("Attempted to resume but no continuation exists", context: ["operation": operationName])
+            logger?.internalWarning("Attempted to resume but no continuation exists", context: ["operation": operationName])
             return
         }
         continuation = nil
         
-        // Cancel any active timeout task and clear handler
         task?.cancel()
         task = nil
         
         switch result {
         case .success(let value):
-            logger.internalDebug("Operation completed successfully", context: ["operation": operationName])
+            logger?.internalDebug("Operation completed successfully", context: ["operation": operationName])
             cont.resume(returning: value)
         case .failure(let error):
-            logger.internalWarning("Operation failed", context: [
+            logger?.internalWarning("Operation failed", context: [
                 "operation": operationName,
                 "error": error.localizedDescription
             ])
@@ -62,28 +61,27 @@ final class TimedOperation<T: Sendable> {
     func setTimeoutTask(timeout: TimeInterval, onTimeoutResult: @escaping () throws -> T) {
         task?.cancel()
         
-        logger.internalDebug("Setting timeout task", context: [
+        logger?.internalDebug("Setting timeout task", context: [
             "operation": operationName,
             "timeout": timeout
         ])
                 
-        // Create a weak reference to self to avoid reference cycles
         task = Task { [weak self, logger, operationName] in
             try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
             
             guard !Task.isCancelled else {
-                logger.internalDebug("Timeout task cancelled", context: ["operation": operationName])
+                logger?.internalDebug("Timeout task cancelled", context: ["operation": operationName])
                 return
             }
             
             await MainActor.run {
                 // Only proceed if TimedOperation still exists and has active continuation
                 guard let self = self, self.continuation != nil else {
-                    logger.internalDebug("Timeout occurred but TimedOperation no longer active", context: ["operation": operationName])
+                    logger?.internalDebug("Timeout occurred but TimedOperation no longer active", context: ["operation": operationName])
                     return
                 }
                 
-                logger.logTimeout(operation: operationName, timeout: timeout)
+                logger?.logTimeout(operation: operationName, timeout: timeout)
                 
                 // Execute the timeout handler and get result
                 do {
@@ -97,7 +95,7 @@ final class TimedOperation<T: Sendable> {
     }
     
     func cancel() {
-        logger.internalInfo("Cancelling operation", context: ["operation": operationName])
+        logger?.internalInfo("Cancelling operation", context: ["operation": operationName])
         task?.cancel()
         task = nil
         continuation?.resume(throwing: CancellationError())
@@ -105,13 +103,10 @@ final class TimedOperation<T: Sendable> {
     }
     
     deinit {
-        logger.internalDebug("TimedOperation deallocated", context: ["operation": operationName])
-        
-        // Cancel any active timeout task on deallocation
+        logger?.internalDebug("TimedOperation deallocated", context: ["operation": operationName])
         task?.cancel()
-        
         if continuation != nil {
-            logger.internalWarning("TimedOperation deallocated with active continuation", context: ["operation": operationName])
+            logger?.internalWarning("TimedOperation deallocated with active continuation", context: ["operation": operationName])
         }
     }
 }

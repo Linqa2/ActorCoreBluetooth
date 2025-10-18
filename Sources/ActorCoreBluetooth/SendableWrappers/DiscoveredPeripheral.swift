@@ -16,7 +16,6 @@ public struct DiscoveredPeripheral: Sendable {
     public let rssi: Int
     public let advertisementData: AdvertisementData
     
-    // Internal reference to CB object
     internal let cbPeripheral: CBPeripheral
     
     init(cbPeripheral: CBPeripheral, advertisementData: [String: Any], rssi: NSNumber) {

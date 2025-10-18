@@ -15,7 +15,6 @@ public struct BluetoothCharacteristic: Sendable {
     public let properties: CharacteristicProperties
     public let value: Data?
     
-    // Internal reference to CB object
     internal let cbCharacteristic: CBCharacteristic
     
     init(cbCharacteristic: CBCharacteristic) {

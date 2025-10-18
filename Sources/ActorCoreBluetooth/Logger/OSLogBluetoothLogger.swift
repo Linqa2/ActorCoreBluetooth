@@ -1,5 +1,5 @@
 //
-//  DefaultBluetoothLogger.swift
+//  OSLogBluetoothLogger.swift
 //  ActorCoreBluetooth
 //
 //  Created by Konstantin Polin on 8/1/25.
@@ -9,12 +9,11 @@
 import Foundation
 import os.log
 
-public final class DefaultBluetoothLogger: BluetoothLogger {
+public final class OSLogBluetoothLogger: BluetoothLogger {
     private let subsystem = "com.actorcorebt.ActorCoreBluetooth"
     private let loggers: [LogCategory: Logger]
     
     public init() {
-        // Create os.log Logger instances for each category
         var loggers: [LogCategory: Logger] = [:]
         for category in LogCategory.allCases {
             loggers[category] = Logger(subsystem: subsystem, category: category.rawValue)

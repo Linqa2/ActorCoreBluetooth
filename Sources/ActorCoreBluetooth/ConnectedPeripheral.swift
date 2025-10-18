@@ -14,15 +14,13 @@ public final class ConnectedPeripheral {
     public let name: String?
     public private(set) var state: PeripheralState
     
-    // Internal CB object
     internal let cbPeripheral: CBPeripheral
     private var delegateProxy: ConnectedPeripheralDelegateProxy?
     
-    // Dependency injection
-    private let logger: BluetoothLogger
+    private let logger: BluetoothLogger?
     
     // Response operations for peripheral operations
-    private var serviceDiscoveryOperations: [String: TimedOperation<[BluetoothService]>] = [:]
+    private var serviceDiscoveryOperation: TimedOperation<[BluetoothService]>?
     private var characteristicDiscoveryOperations: [String: TimedOperation<[BluetoothCharacteristic]>] = [:]
     private var characteristicReadOperations: [String: TimedOperation<Data?>] = [:]
     private var characteristicWriteOperations: [String: TimedOperation<Void>] = [:]
@@ -33,7 +31,7 @@ public final class ConnectedPeripheral {
     private var characteristicValueStreams: [UUID: AsyncStream<(BluetoothCharacteristic, Data?)>.Continuation] = [:]
     private var notificationStreams: [UUID: AsyncStream<(BluetoothCharacteristic, Data?)>.Continuation] = [:]
     
-    internal init(cbPeripheral: CBPeripheral, logger: BluetoothLogger) {
+    internal init(cbPeripheral: CBPeripheral, logger: BluetoothLogger?) {
         self.identifier = cbPeripheral.identifier
         self.name = cbPeripheral.name
         self.state = PeripheralState(cbState: cbPeripheral.state)
@@ -43,10 +41,9 @@ public final class ConnectedPeripheral {
         let proxy = ConnectedPeripheralDelegateProxy(peripheral: self, logger: logger)
         self.delegateProxy = proxy
         
-        // Set proxy as delegate
         cbPeripheral.delegate = proxy
         
-        logger.peripheralInfo("ConnectedPeripheral initialized", context: [
+        logger?.peripheralInfo("ConnectedPeripheral initialized", context: [
             "peripheralName": self.name ?? "Unknown",
             "peripheralID": self.identifier.uuidString
         ])
@@ -57,23 +54,23 @@ public final class ConnectedPeripheral {
     /// Discover services on this peripheral
     public func discoverServices(serviceUUIDs: [String]? = nil, timeout: TimeInterval? = nil) async throws -> [BluetoothService] {
         guard cbPeripheral.state == .connected else {
-            logger.errorError("Cannot discover services: peripheral not connected", context: [
+            logger?.errorError("Cannot discover services: peripheral not connected", context: [
                 "peripheralID": identifier.uuidString
             ])
             throw BluetoothError.peripheralNotConnected
         }
         
         // Cancel any existing service discovery operation
-        if let existingDiscovery = serviceDiscoveryOperations["services"] {
-            logger.serviceInfo("Canceling previous service discovery to start new one", context: [
+        if let existingDiscovery = serviceDiscoveryOperation {
+            logger?.serviceInfo("Canceling previous service discovery to start new one", context: [
                 "peripheralID": identifier.uuidString
             ])
             existingDiscovery.resumeOnce(with: .failure(BluetoothError.operationCancelled))
-            serviceDiscoveryOperations.removeValue(forKey: "services")
+            serviceDiscoveryOperation = nil
         }
         
         let serviceInfo = serviceUUIDs?.joined(separator: ", ") ?? "all services"
-        logger.serviceInfo("Discovering services", context: [
+        logger?.serviceInfo("Discovering services", context: [
             "services": serviceInfo,
             "peripheralID": identifier.uuidString,
             "timeout": timeout as Any
@@ -85,29 +82,26 @@ public final class ConnectedPeripheral {
                 logger: logger
             )
             discovery.setup(continuation)
+            serviceDiscoveryOperation = discovery
             
-            serviceDiscoveryOperations["services"] = discovery
-            
-            // Setup timeout if provided - for discovery, timeout returns partial results instead of throwing
             if let timeout = timeout {
-                logger.internalDebug("Setting service discovery timeout", context: ["timeout": timeout])
+                logger?.internalDebug("Setting service discovery timeout", context: ["timeout": timeout])
                 discovery.setTimeoutTask(timeout: timeout, onTimeoutResult: { [weak self] in
                     guard let self else { return [] }
                     
                     let currentServices = self.cbPeripheral.services?.map { BluetoothService(cbService: $0) } ?? []
-                    self.logger.serviceInfo("Service discovery completed (timeout reached)", context: [
+                    self.logger?.serviceInfo("Service discovery completed (timeout reached)", context: [
                         "timeout": timeout,
                         "peripheralID": self.identifier.uuidString,
                         "discoveredCount": currentServices.count
                     ])
-                    self.serviceDiscoveryOperations.removeValue(forKey: "services")
+                    self.serviceDiscoveryOperation = nil
                     return currentServices
                 })
             }
             
-            // Start service discovery
             let cbServiceUUIDs = serviceUUIDs?.compactMap { CBUUID(string: $0) }
-            logger.internalDebug("Calling CBPeripheral.discoverServices")
+            logger?.internalDebug("Calling CBPeripheral.discoverServices")
             cbPeripheral.discoverServices(cbServiceUUIDs)
         }
     }
@@ -115,7 +109,7 @@ public final class ConnectedPeripheral {
     /// Discover characteristics for a service
     public func discoverCharacteristics(for service: BluetoothService, characteristicUUIDs: [String]? = nil, timeout: TimeInterval? = nil) async throws -> [BluetoothCharacteristic] {
         guard cbPeripheral.state == .connected else {
-            logger.errorError("Cannot discover characteristics: peripheral not connected", context: [
+            logger?.errorError("Cannot discover characteristics: peripheral not connected", context: [
                 "peripheralID": identifier.uuidString
             ])
             throw BluetoothError.peripheralNotConnected
@@ -125,7 +119,7 @@ public final class ConnectedPeripheral {
         
         // Cancel any existing characteristic discovery operation for this service
         if let existingDiscovery = characteristicDiscoveryOperations[key] {
-            logger.characteristicInfo("Canceling previous characteristic discovery to start new one", context: [
+            logger?.characteristicInfo("Canceling previous characteristic discovery to start new one", context: [
                 "serviceUUID": service.uuid,
                 "peripheralID": identifier.uuidString
             ])
@@ -134,7 +128,7 @@ public final class ConnectedPeripheral {
         }
         
         let charInfo = characteristicUUIDs?.joined(separator: ", ") ?? "all characteristics"
-        logger.characteristicInfo("Discovering characteristics", context: [
+        logger?.characteristicInfo("Discovering characteristics", context: [
             "characteristics": charInfo,
             "serviceUUID": service.uuid,
             "peripheralID": identifier.uuidString,
@@ -147,12 +141,10 @@ public final class ConnectedPeripheral {
                 logger: logger
             )
             discovery.setup(continuation)
-            
             characteristicDiscoveryOperations[key] = discovery
             
-            // Setup timeout if provided - for discovery, timeout returns partial results instead of throwing
             if let timeout = timeout {
-                logger.internalDebug("Setting characteristic discovery timeout", context: [
+                logger?.internalDebug("Setting characteristic discovery timeout", context: [
                     "timeout": timeout,
                     "serviceUUID": service.uuid
                 ])
@@ -160,7 +152,7 @@ public final class ConnectedPeripheral {
                     guard let self else { return [] }
                     
                     let currentCharacteristics = service.cbService.characteristics?.map { BluetoothCharacteristic(cbCharacteristic: $0) } ?? []
-                    self.logger.characteristicInfo("Characteristic discovery completed (timeout reached)", context: [
+                    self.logger?.characteristicInfo("Characteristic discovery completed (timeout reached)", context: [
                         "timeout": timeout,
                         "serviceUUID": service.uuid,
                         "discoveredCount": currentCharacteristics.count
@@ -170,9 +162,8 @@ public final class ConnectedPeripheral {
                 })
             }
             
-            // Start characteristic discovery
             let cbCharacteristicUUIDs = characteristicUUIDs?.compactMap { CBUUID(string: $0) }
-            logger.internalDebug("Calling CBPeripheral.discoverCharacteristics", context: [
+            logger?.internalDebug("Calling CBPeripheral.discoverCharacteristics", context: [
                 "serviceUUID": service.uuid
             ])
             cbPeripheral.discoverCharacteristics(cbCharacteristicUUIDs, for: service.cbService)
@@ -184,14 +175,14 @@ public final class ConnectedPeripheral {
     /// Read value from a characteristic
     public func readValue(for characteristic: BluetoothCharacteristic, timeout: TimeInterval? = nil) async throws -> Data? {
         guard cbPeripheral.state == .connected else {
-            logger.errorError("Cannot read characteristic: peripheral not connected", context: [
+            logger?.errorError("Cannot read characteristic: peripheral not connected", context: [
                 "peripheralID": identifier.uuidString
             ])
             throw BluetoothError.peripheralNotConnected
         }
         
         guard characteristic.properties.contains(.read) else {
-            logger.errorError("Characteristic does not support read operations", context: [
+            logger?.errorError("Characteristic does not support read operations", context: [
                 "characteristicUUID": characteristic.uuid
             ])
             throw BluetoothError.operationNotSupported
@@ -201,7 +192,7 @@ public final class ConnectedPeripheral {
         
         // Cancel any existing read operation for this characteristic
         if let existingRead = characteristicReadOperations[key] {
-            logger.characteristicInfo("Canceling previous read operation to start new one", context: [
+            logger?.characteristicInfo("Canceling previous read operation to start new one", context: [
                 "characteristicUUID": characteristic.uuid,
                 "peripheralID": identifier.uuidString
             ])
@@ -209,7 +200,7 @@ public final class ConnectedPeripheral {
             characteristicReadOperations.removeValue(forKey: key)
         }
         
-        logger.logCharacteristic(
+        logger?.logCharacteristic(
             operation: "Reading",
             uuid: characteristic.uuid,
             peripheralID: identifier,
@@ -222,29 +213,25 @@ public final class ConnectedPeripheral {
                 logger: logger
             )
             read.setup(continuation)
-            
             characteristicReadOperations[key] = read
             
-            // Setup timeout if provided
             if let timeout = timeout {
-                logger.internalDebug("Setting read timeout", context: [
+                logger?.internalDebug("Setting read timeout", context: [
                     "timeout": timeout,
                     "characteristicUUID": characteristic.uuid
                 ])
                 read.setTimeoutTask(timeout: timeout, onTimeout: { [weak self] in
                     guard let self else { return }
-                    self.logger.logTimeout(
+                    self.logger?.logTimeout(
                         operation: "Read",
                         timeout: timeout,
                         context: ["characteristicUUID": characteristic.uuid]
                     )
                     self.characteristicReadOperations.removeValue(forKey: key)
-                    // Throws BluetoothError.connectionTimeout by default
                 })
             }
             
-            // Start read operation
-            logger.internalDebug("Calling CBPeripheral.readValue", context: [
+            logger?.internalDebug("Calling CBPeripheral.readValue", context: [
                 "characteristicUUID": characteristic.uuid
             ])
             cbPeripheral.readValue(for: characteristic.cbCharacteristic)
@@ -254,14 +241,14 @@ public final class ConnectedPeripheral {
     /// Write value to a characteristic (with response)
     public func writeValue(_ data: Data, for characteristic: BluetoothCharacteristic, timeout: TimeInterval? = nil) async throws {
         guard cbPeripheral.state == .connected else {
-            logger.errorError("Cannot write characteristic: peripheral not connected", context: [
+            logger?.errorError("Cannot write characteristic: peripheral not connected", context: [
                 "peripheralID": identifier.uuidString
             ])
             throw BluetoothError.peripheralNotConnected
         }
         
         guard characteristic.properties.contains(.write) else {
-            logger.errorError("Characteristic does not support write operations", context: [
+            logger?.errorError("Characteristic does not support write operations", context: [
                 "characteristicUUID": characteristic.uuid
             ])
             throw BluetoothError.operationNotSupported
@@ -271,7 +258,7 @@ public final class ConnectedPeripheral {
         
         // Cancel any existing write operation for this characteristic
         if let existingWrite = characteristicWriteOperations[key] {
-            logger.characteristicInfo("Canceling previous write operation to start new one", context: [
+            logger?.characteristicInfo("Canceling previous write operation to start new one", context: [
                 "characteristicUUID": characteristic.uuid,
                 "peripheralID": identifier.uuidString
             ])
@@ -279,7 +266,7 @@ public final class ConnectedPeripheral {
             characteristicWriteOperations.removeValue(forKey: key)
         }
         
-        logger.logCharacteristic(
+        logger?.logCharacteristic(
             operation: "Writing",
             uuid: characteristic.uuid,
             peripheralID: identifier,
@@ -293,29 +280,25 @@ public final class ConnectedPeripheral {
                 logger: logger
             )
             write.setup(continuation)
-            
             characteristicWriteOperations[key] = write
             
-            // Setup timeout if provided
             if let timeout = timeout {
-                logger.internalDebug("Setting write timeout", context: [
+                logger?.internalDebug("Setting write timeout", context: [
                     "timeout": timeout,
                     "characteristicUUID": characteristic.uuid
                 ])
                 write.setTimeoutTask(timeout: timeout, onTimeout: { [weak self] in
                     guard let self else { return }
-                    self.logger.logTimeout(
+                    self.logger?.logTimeout(
                         operation: "Write",
                         timeout: timeout,
                         context: ["characteristicUUID": characteristic.uuid]
                     )
                     self.characteristicWriteOperations.removeValue(forKey: key)
-                    // Throws BluetoothError.connectionTimeout by default
                 })
             }
             
-            // Start write operation
-            logger.internalDebug("Calling CBPeripheral.writeValue", context: [
+            logger?.internalDebug("Calling CBPeripheral.writeValue", context: [
                 "characteristicUUID": characteristic.uuid,
                 "dataLength": data.count
             ])
@@ -326,20 +309,20 @@ public final class ConnectedPeripheral {
     /// Write value without response (fire and forget)
     public func writeValueWithoutResponse(_ data: Data, for characteristic: BluetoothCharacteristic) throws {
         guard cbPeripheral.state == .connected else {
-            logger.errorError("Cannot write without response: peripheral not connected", context: [
+            logger?.errorError("Cannot write without response: peripheral not connected", context: [
                 "peripheralID": identifier.uuidString
             ])
             throw BluetoothError.peripheralNotConnected
         }
         
         guard characteristic.properties.contains(.writeWithoutResponse) else {
-            logger.errorError("Characteristic does not support write without response", context: [
+            logger?.errorError("Characteristic does not support write without response", context: [
                 "characteristicUUID": characteristic.uuid
             ])
             throw BluetoothError.operationNotSupported
         }
         
-        logger.logCharacteristic(
+        logger?.logCharacteristic(
             operation: "Writing (no response)",
             uuid: characteristic.uuid,
             peripheralID: identifier,
@@ -348,7 +331,7 @@ public final class ConnectedPeripheral {
         
         // Write without response doesn't need continuation - fire and forget
         cbPeripheral.writeValue(data, for: characteristic.cbCharacteristic, type: .withoutResponse)
-        logger.characteristicDebug("Write without response completed", context: [
+        logger?.characteristicDebug("Write without response completed", context: [
             "characteristicUUID": characteristic.uuid
         ])
     }
@@ -356,14 +339,14 @@ public final class ConnectedPeripheral {
     /// Set notification state for a characteristic
     public func setNotificationState(_ enabled: Bool, for characteristic: BluetoothCharacteristic, timeout: TimeInterval? = nil) async throws {
         guard cbPeripheral.state == .connected else {
-            logger.errorError("Cannot set notification state: peripheral not connected", context: [
+            logger?.errorError("Cannot set notification state: peripheral not connected", context: [
                 "peripheralID": identifier.uuidString
             ])
             throw BluetoothError.peripheralNotConnected
         }
         
         guard characteristic.properties.contains(.notify) || characteristic.properties.contains(.indicate) else {
-            logger.errorError("Characteristic does not support notifications/indications", context: [
+            logger?.errorError("Characteristic does not support notifications/indications", context: [
                 "characteristicUUID": characteristic.uuid
             ])
             throw BluetoothError.operationNotSupported
@@ -373,7 +356,7 @@ public final class ConnectedPeripheral {
         
         // Cancel any existing notification state operation for this characteristic
         if let existingNotification = notificationStateOperations[key] {
-            logger.characteristicInfo("Canceling previous notification state operation to start new one", context: [
+            logger?.characteristicInfo("Canceling previous notification state operation to start new one", context: [
                 "characteristicUUID": characteristic.uuid,
                 "peripheralID": identifier.uuidString
             ])
@@ -382,7 +365,7 @@ public final class ConnectedPeripheral {
         }
         
         let operation = enabled ? "Enabling" : "Disabling"
-        logger.characteristicInfo("\(operation) notifications", context: [
+        logger?.characteristicInfo("\(operation) notifications", context: [
             "characteristicUUID": characteristic.uuid,
             "peripheralID": identifier.uuidString,
             "timeout": timeout as Any
@@ -394,28 +377,24 @@ public final class ConnectedPeripheral {
                 logger: logger
             )
             notification.setup(continuation)
-            
             notificationStateOperations[key] = notification
             
-            // Setup timeout if provided
             if let timeout = timeout {
-                logger.internalDebug("Setting notification state timeout", context: [
+                logger?.internalDebug("Setting notification state timeout", context: [
                     "timeout": timeout
                 ])
                 notification.setTimeoutTask(timeout: timeout, onTimeout: { [weak self] in
                     guard let self else { return }
-                    self.logger.logTimeout(
+                    self.logger?.logTimeout(
                         operation: "Notification state change",
                         timeout: timeout,
                         context: ["characteristicUUID": characteristic.uuid]
                     )
                     self.notificationStateOperations.removeValue(forKey: key)
-                    // Throws BluetoothError.connectionTimeout by default
                 })
             }
             
-            // Set notification state
-            logger.internalDebug("Calling CBPeripheral.setNotifyValue", context: [
+            logger?.internalDebug("Calling CBPeripheral.setNotifyValue", context: [
                 "enabled": enabled,
                 "characteristicUUID": characteristic.uuid
             ])
@@ -429,7 +408,7 @@ public final class ConnectedPeripheral {
     public func createServiceDiscoveryMonitor() -> (stream: AsyncStream<[BluetoothService]>, monitorID: UUID) {
         let monitorID = UUID()
         
-        logger.streamInfo("Creating service discovery monitor", context: [
+        logger?.streamInfo("Creating service discovery monitor", context: [
             "peripheralID": identifier.uuidString,
             "monitorID": monitorID.uuidString
         ])
@@ -443,7 +422,7 @@ public final class ConnectedPeripheral {
     
     /// Stop monitoring service discovery
     public func stopServiceDiscoveryMonitoring(_ monitorID: UUID) {
-        logger.streamInfo("Stopping service discovery monitor", context: [
+        logger?.streamInfo("Stopping service discovery monitor", context: [
             "monitorID": monitorID.uuidString
         ])
         serviceDiscoveryStreams[monitorID]?.finish()
@@ -454,7 +433,7 @@ public final class ConnectedPeripheral {
     public func createCharacteristicValueMonitor() -> (stream: AsyncStream<(BluetoothCharacteristic, Data?)>, monitorID: UUID) {
         let monitorID = UUID()
 
-        logger.streamInfo("Creating characteristic value monitor", context: [
+        logger?.streamInfo("Creating characteristic value monitor", context: [
             "peripheralID": identifier.uuidString,
             "monitorID": monitorID.uuidString
         ])
@@ -468,7 +447,7 @@ public final class ConnectedPeripheral {
     
     /// Stop monitoring characteristic values
     public func stopCharacteristicValueMonitoring(_ monitorID: UUID) {
-        logger.streamInfo("Stopping characteristic value monitor", context: [
+        logger?.streamInfo("Stopping characteristic value monitor", context: [
             "monitorID": monitorID.uuidString
         ])
         characteristicValueStreams[monitorID]?.finish()
@@ -479,7 +458,7 @@ public final class ConnectedPeripheral {
     public func createNotificationMonitor() -> (stream: AsyncStream<(BluetoothCharacteristic, Data?)>, monitorID: UUID) {
         let monitorID = UUID()
         
-        logger.streamInfo("Creating notification monitor", context: [
+        logger?.streamInfo("Creating notification monitor", context: [
             "peripheralID": identifier.uuidString,
             "monitorID": monitorID.uuidString
         ])
@@ -493,7 +472,7 @@ public final class ConnectedPeripheral {
     
     /// Stop monitoring notifications
     public func stopNotificationMonitoring(_ monitorID: UUID) {
-        logger.streamInfo("Stopping notification monitor", context: [
+        logger?.streamInfo("Stopping notification monitor", context: [
             "monitorID": monitorID.uuidString
         ])
         notificationStreams[monitorID]?.finish()
@@ -504,21 +483,21 @@ public final class ConnectedPeripheral {
     
     /// Full service and characteristic discovery
     public func discoverAllServicesAndCharacteristics(timeout: TimeInterval? = 10.0) async throws -> [BluetoothService] {
-        logger.peripheralInfo("Starting complete discovery", context: [
+        logger?.peripheralInfo("Starting complete discovery", context: [
             "peripheralID": identifier.uuidString
         ])
         
         let services = try await discoverServices(timeout: timeout)
-        logger.logServiceDiscovery(count: services.count, peripheralID: identifier)
+        logger?.logServiceDiscovery(count: services.count, peripheralID: identifier)
         
         var servicesWithCharacteristics: [BluetoothService] = []
         
         for service in services {
-            logger.serviceDebug("Discovering characteristics for service", context: [
+            logger?.serviceDebug("Discovering characteristics for service", context: [
                 "serviceUUID": service.uuid
             ])
             let characteristics = try await discoverCharacteristics(for: service, timeout: timeout)
-            logger.characteristicDebug("Found characteristics for service", context: [
+            logger?.characteristicDebug("Found characteristics for service", context: [
                 "serviceUUID": service.uuid,
                 "characteristicCount": characteristics.count
             ])
@@ -530,7 +509,7 @@ public final class ConnectedPeripheral {
             servicesWithCharacteristics.append(serviceWithCharacteristics)
         }
         
-        logger.peripheralNotice("Complete discovery finished", context: [
+        logger?.peripheralNotice("Complete discovery finished", context: [
             "peripheralID": identifier.uuidString,
             "serviceCount": services.count
         ])
@@ -541,27 +520,27 @@ public final class ConnectedPeripheral {
     
     // Called by delegate proxy when services are discovered
     internal func handleServiceDiscovery(services: [CBService]?, error: Error?) {
-        logger.internalDebug("Processing service discovery response")
+        logger?.internalDebug("Processing service discovery response")
         
-        if let discovery = serviceDiscoveryOperations["services"] {
-            serviceDiscoveryOperations.removeValue(forKey: "services")
+        if let discovery = serviceDiscoveryOperation {
+            serviceDiscoveryOperation = nil
             
             if let error = error {
-                logger.errorError("Service discovery failed", context: [
+                logger?.errorError("Service discovery failed", context: [
                     "error": error.localizedDescription
                 ])
                 discovery.resumeOnce(with: .failure(error))
             } else if let services = services {
                 let bluetoothServices = services.map { BluetoothService(cbService: $0) }
-                logger.logServiceDiscovery(count: bluetoothServices.count, peripheralID: identifier)
+                logger?.logServiceDiscovery(count: bluetoothServices.count, peripheralID: identifier)
                 discovery.resumeOnce(with: .success(bluetoothServices))
                 
-                // Also notify streams
+                // Notify streams
                 for continuation in serviceDiscoveryStreams.values {
                     continuation.yield(bluetoothServices)
                 }
             } else {
-                logger.serviceInfo("No services discovered")
+                logger?.serviceInfo("No services discovered")
                 discovery.resumeOnce(with: .success([]))
                 
                 // Notify streams of empty result
@@ -576,7 +555,7 @@ public final class ConnectedPeripheral {
     internal func handleCharacteristicDiscovery(for service: CBService, characteristics: [CBCharacteristic]?, error: Error?) {
         let key = service.uuid.uuidString
         
-        logger.internalDebug("Processing characteristic discovery response", context: [
+        logger?.internalDebug("Processing characteristic discovery response", context: [
             "serviceUUID": service.uuid.uuidString
         ])
         
@@ -584,20 +563,20 @@ public final class ConnectedPeripheral {
             characteristicDiscoveryOperations.removeValue(forKey: key)
             
             if let error = error {
-                logger.errorError("Characteristic discovery failed", context: [
+                logger?.errorError("Characteristic discovery failed", context: [
                     "serviceUUID": service.uuid.uuidString,
                     "error": error.localizedDescription
                 ])
                 discovery.resumeOnce(with: .failure(error))
             } else if let characteristics = characteristics {
                 let bluetoothCharacteristics = characteristics.map { BluetoothCharacteristic(cbCharacteristic: $0) }
-                logger.characteristicInfo("Discovered characteristics", context: [
+                logger?.characteristicInfo("Discovered characteristics", context: [
                     "serviceUUID": service.uuid.uuidString,
                     "count": bluetoothCharacteristics.count
                 ])
                 discovery.resumeOnce(with: .success(bluetoothCharacteristics))
             } else {
-                logger.characteristicInfo("No characteristics discovered", context: [
+                logger?.characteristicInfo("No characteristics discovered", context: [
                     "serviceUUID": service.uuid.uuidString
                 ])
                 discovery.resumeOnce(with: .success([]))
@@ -611,12 +590,12 @@ public final class ConnectedPeripheral {
         let bluetoothCharacteristic = BluetoothCharacteristic(cbCharacteristic: characteristic)
         
         if let error = error {
-            logger.errorError("Characteristic value update failed", context: [
+            logger?.errorError("Characteristic value update failed", context: [
                 "characteristicUUID": characteristic.uuid.uuidString,
                 "error": error.localizedDescription
             ])
         } else {
-            logger.logCharacteristic(
+            logger?.logCharacteristic(
                 operation: "Value updated",
                 uuid: characteristic.uuid.uuidString,
                 peripheralID: identifier,
@@ -624,7 +603,6 @@ public final class ConnectedPeripheral {
             )
         }
         
-        // Handle read response continuations
         if let read = characteristicReadOperations[key] {
             characteristicReadOperations.removeValue(forKey: key)
             
@@ -642,7 +620,7 @@ public final class ConnectedPeripheral {
         
         // If this was a notification/indication, also notify notification streams
         if characteristic.isNotifying {
-            logger.internalDebug("Notification received", context: [
+            logger?.internalDebug("Notification received", context: [
                 "characteristicUUID": characteristic.uuid.uuidString
             ])
             for continuation in notificationStreams.values {
@@ -656,12 +634,12 @@ public final class ConnectedPeripheral {
         let key = characteristic.uuid.uuidString
         
         if let error = error {
-            logger.errorError("Characteristic write failed", context: [
+            logger?.errorError("Characteristic write failed", context: [
                 "characteristicUUID": characteristic.uuid.uuidString,
                 "error": error.localizedDescription
             ])
         } else {
-            logger.logCharacteristic(
+            logger?.logCharacteristic(
                 operation: "Write completed",
                 uuid: characteristic.uuid.uuidString,
                 peripheralID: identifier
@@ -684,13 +662,13 @@ public final class ConnectedPeripheral {
         let key = characteristic.uuid.uuidString
         
         if let error = error {
-            logger.errorError("Notification state update failed", context: [
+            logger?.errorError("Notification state update failed", context: [
                 "characteristicUUID": characteristic.uuid.uuidString,
                 "error": error.localizedDescription
             ])
         } else {
             let state = characteristic.isNotifying ? "enabled" : "disabled"
-            logger.characteristicInfo("Notifications \(state)", context: [
+            logger?.characteristicInfo("Notifications \(state)", context: [
                 "characteristicUUID": characteristic.uuid.uuidString
             ])
         }
@@ -708,48 +686,43 @@ public final class ConnectedPeripheral {
     
     /// Cancel all pending operations - called during disconnection
     internal func cancelAllPendingOperations() {
-        logger.peripheralInfo("Cancelling all pending operations due to disconnection", context: [
+        logger?.peripheralInfo("Cancelling all pending operations due to disconnection", context: [
             "peripheralID": identifier.uuidString
         ])
         
         var cancelledCount = 0
         
-        // Cancel service discovery operations
-        for (_, operation) in serviceDiscoveryOperations {
-            operation.cancel()
+        if serviceDiscoveryOperation != nil {
+            serviceDiscoveryOperation?.cancel()
+            serviceDiscoveryOperation = nil
             cancelledCount += 1
         }
-        serviceDiscoveryOperations.removeAll()
         
-        // Cancel characteristic discovery operations
         for (_, operation) in characteristicDiscoveryOperations {
             operation.cancel()
             cancelledCount += 1
         }
         characteristicDiscoveryOperations.removeAll()
         
-        // Cancel characteristic read operations
         for (_, operation) in characteristicReadOperations {
             operation.cancel()
             cancelledCount += 1
         }
         characteristicReadOperations.removeAll()
         
-        // Cancel characteristic write operations
         for (_, operation) in characteristicWriteOperations {
             operation.cancel()
             cancelledCount += 1
         }
         characteristicWriteOperations.removeAll()
         
-        // Cancel notification state operations
         for (_, operation) in notificationStateOperations {
             operation.cancel()
             cancelledCount += 1
         }
         notificationStateOperations.removeAll()
         
-        logger.internalInfo("All pending operations cancelled", context: [
+        logger?.internalInfo("All pending operations cancelled", context: [
             "peripheralID": identifier.uuidString,
             "cancelledOperations": cancelledCount
         ])
@@ -763,13 +736,13 @@ public final class ConnectedPeripheral {
 private final class ConnectedPeripheralDelegateProxy: NSObject, @preconcurrency CBPeripheralDelegate {
     
     private weak var peripheral: ConnectedPeripheral?
-    private let logger: BluetoothLogger
+    private let logger: BluetoothLogger?
     
-    init(peripheral: ConnectedPeripheral, logger: BluetoothLogger) {
+    init(peripheral: ConnectedPeripheral, logger: BluetoothLogger?) {
         self.peripheral = peripheral
         self.logger = logger
         super.init()
-        logger.internalDebug("ConnectedPeripheralDelegateProxy initialized", context: [
+        logger?.internalDebug("ConnectedPeripheralDelegateProxy initialized", context: [
             "peripheralID": peripheral.identifier.uuidString
         ])
     }
@@ -777,33 +750,33 @@ private final class ConnectedPeripheralDelegateProxy: NSObject, @preconcurrency 
     // MARK: - CBPeripheralDelegate
     
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        logger.internalDebug("CBPeripheralDelegate.didDiscoverServices called")
+        logger?.internalDebug("CBPeripheralDelegate.didDiscoverServices called")
         self.peripheral?.handleServiceDiscovery(services: peripheral.services, error: error)
     }
     
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
-        logger.internalDebug("CBPeripheralDelegate.didDiscoverCharacteristicsFor called", context: [
+        logger?.internalDebug("CBPeripheralDelegate.didDiscoverCharacteristicsFor called", context: [
             "serviceUUID": service.uuid.uuidString
         ])
         self.peripheral?.handleCharacteristicDiscovery(for: service, characteristics: service.characteristics, error: error)
     }
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        logger.internalDebug("CBPeripheralDelegate.didUpdateValueFor called", context: [
+        logger?.internalDebug("CBPeripheralDelegate.didUpdateValueFor called", context: [
             "characteristicUUID": characteristic.uuid.uuidString
         ])
         self.peripheral?.handleCharacteristicValueUpdate(for: characteristic, error: error)
     }
     
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
-        logger.internalDebug("CBPeripheralDelegate.didWriteValueFor called", context: [
+        logger?.internalDebug("CBPeripheralDelegate.didWriteValueFor called", context: [
             "characteristicUUID": characteristic.uuid.uuidString
         ])
         self.peripheral?.handleCharacteristicWrite(for: characteristic, error: error)
     }
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
-        logger.internalDebug("CBPeripheralDelegate.didUpdateNotificationStateFor called", context: [
+        logger?.internalDebug("CBPeripheralDelegate.didUpdateNotificationStateFor called", context: [
             "characteristicUUID": characteristic.uuid.uuidString
         ])
         self.peripheral?.handleNotificationStateUpdate(for: characteristic, error: error)

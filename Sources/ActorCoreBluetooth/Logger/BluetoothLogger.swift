@@ -1,5 +1,5 @@
 //
-//  BluetoothLogging.swift
+//  BluetoothLogger.swift
 //  ActorCoreBluetooth
 //
 //  Created by Konstantin Polin on 8/1/25.
@@ -9,170 +9,60 @@
 import Foundation
 import os.log
 
+// MARK: - Logging Structures
+
+public enum LogCategory: String, Sendable, CaseIterable {
+    case central = "central"
+    case peripheral = "peripheral"
+    case connection = "connection"
+    case characteristic = "characteristic"
+    case service = "service"
+    case stream = "stream"
+    case error = "error"
+    case `internal` = "internal"
+    
+    var description: String {
+        switch self {
+        case .central: return "Central manager operations (scanning, connecting, state changes)"
+        case .peripheral: return "Connected peripheral operations (services, characteristics, reads/writes)"
+        case .connection: return "Connection lifecycle events (connect, disconnect, state changes)"
+        case .characteristic: return "Characteristic operations (read, write, notify, discover)"
+        case .service: return "Service discovery operations"
+        case .stream: return "Stream management and monitoring"
+        case .error: return "Errors and failure conditions"
+        case .internal: return "Internal implementation details and debugging"
+        }
+    }
+    
+    /// Categories that are relevant for end users (excludes internal implementation details)
+    public static var userFacing: Set<LogCategory> {
+        return [.central, .peripheral, .connection, .characteristic, .service, .stream, .error]
+    }
+}
+
+public enum LogLevel: String, Sendable, CaseIterable {
+    case debug = "debug"
+    case info = "info"
+    case notice = "notice"
+    case warning = "warning"
+    case error = "error"
+    case fault = "fault"
+    
+    var osLogType: OSLogType {
+        switch self {
+        case .debug: return .debug
+        case .info: return .info
+        case .notice: return .default
+        case .warning: return .error
+        case .error: return .error
+        case .fault: return .fault
+        }
+    }
+}
+
 // MARK: - Logging Protocol
 
 public protocol BluetoothLogger: Sendable {
     func log(level: LogLevel, category: LogCategory, message: String, context: [String: Any]?)
 }
 
-// MARK: - Silent Logger
-
-public final class SilentBluetoothLogger: BluetoothLogger {
-    public init() {}
-    
-    public func log(level: LogLevel, category: LogCategory, message: String, context: [String: Any]?) {
-        // Do nothing - silent logging
-    }
-}
-
-// MARK: - Convenience Logging Methods
-
-extension BluetoothLogger {
-    
-    // MARK: - Central Operations
-    
-    func logCentral(_ level: LogLevel, _ message: String, context: [String: Any]? = nil) {
-        log(level: level, category: .central, message: message, context: context)
-    }
-    
-    func centralInfo(_ message: String, context: [String: Any]? = nil) {
-        logCentral(.info, message, context: context)
-    }
-    
-    func centralDebug(_ message: String, context: [String: Any]? = nil) {
-        logCentral(.debug, message, context: context)
-    }
-    
-    func centralNotice(_ message: String, context: [String: Any]? = nil) {
-        logCentral(.notice, message, context: context)
-    }
-    
-    func centralWarning(_ message: String, context: [String: Any]? = nil) {
-        logCentral(.warning, message, context: context)
-    }
-    
-    // MARK: - Connection Events
-    
-    func logConnection(event: String, peripheral: String, peripheralID: UUID, context: [String: Any]? = nil) {
-        var fullContext = context ?? [:]
-        fullContext["peripheralName"] = peripheral
-        fullContext["peripheralID"] = peripheralID.uuidString
-        log(level: .info, category: .connection, message: event, context: fullContext)
-    }
-    
-    func connectionInfo(_ message: String, context: [String: Any]? = nil) {
-        log(level: .info, category: .connection, message: message, context: context)
-    }
-    
-    func connectionDebug(_ message: String, context: [String: Any]? = nil) {
-        log(level: .debug, category: .connection, message: message, context: context)
-    }
-    
-    func connectionNotice(_ message: String, context: [String: Any]? = nil) {
-        log(level: .notice, category: .connection, message: message, context: context)
-    }
-    
-    func connectionWarning(_ message: String, context: [String: Any]? = nil) {
-        log(level: .warning, category: .connection, message: message, context: context)
-    }
-    
-    // MARK: - Characteristic Operations
-    
-    func logCharacteristic(operation: String, uuid: String, peripheralID: UUID, dataLength: Int? = nil, context: [String: Any]? = nil) {
-        var fullContext = context ?? [:]
-        fullContext["characteristicUUID"] = uuid
-        fullContext["peripheralID"] = peripheralID.uuidString
-        if let dataLength = dataLength {
-            fullContext["dataLength"] = dataLength
-        }
-        log(level: .info, category: .characteristic, message: operation, context: fullContext)
-    }
-    
-    func characteristicInfo(_ message: String, context: [String: Any]? = nil) {
-        log(level: .info, category: .characteristic, message: message, context: context)
-    }
-    
-    func characteristicDebug(_ message: String, context: [String: Any]? = nil) {
-        log(level: .debug, category: .characteristic, message: message, context: context)
-    }
-    
-    func characteristicWarning(_ message: String, context: [String: Any]? = nil) {
-        log(level: .warning, category: .characteristic, message: message, context: context)
-    }
-    
-    // MARK: - Service Discovery
-    
-    func logServiceDiscovery(count: Int, peripheralID: UUID, context: [String: Any]? = nil) {
-        var fullContext = context ?? [:]
-        fullContext["serviceCount"] = count
-        fullContext["peripheralID"] = peripheralID.uuidString
-        log(level: .info, category: .service, message: "Discovered services", context: fullContext)
-    }
-    
-    func serviceInfo(_ message: String, context: [String: Any]? = nil) {
-        log(level: .info, category: .service, message: message, context: context)
-    }
-    
-    func serviceDebug(_ message: String, context: [String: Any]? = nil) {
-        log(level: .debug, category: .service, message: message, context: context)
-    }
-    
-    func serviceWarning(_ message: String, context: [String: Any]? = nil) {
-        log(level: .warning, category: .service, message: message, context: context)
-    }
-    
-    // MARK: - Error Logging
-    
-    func logTimeout(operation: String, timeout: TimeInterval, context: [String: Any]? = nil) {
-        var fullContext = context ?? [:]
-        fullContext["operation"] = operation
-        fullContext["timeout"] = timeout
-        log(level: .warning, category: .error, message: "Operation timeout", context: fullContext)
-    }
-    
-    func errorWarning(_ message: String, context: [String: Any]? = nil) {
-        log(level: .warning, category: .error, message: message, context: context)
-    }
-    
-    func errorError(_ message: String, context: [String: Any]? = nil) {
-        log(level: .error, category: .error, message: message, context: context)
-    }
-    
-    // MARK: - Internal Operations (Internal)
-    
-    func internalDebug(_ message: String, context: [String: Any]? = nil) {
-        log(level: .debug, category: .internal, message: message, context: context)
-    }
-    
-    func internalInfo(_ message: String, context: [String: Any]? = nil) {
-        log(level: .info, category: .internal, message: message, context: context)
-    }
-    
-    func internalWarning(_ message: String, context: [String: Any]? = nil) {
-        log(level: .warning, category: .internal, message: message, context: context)
-    }
-    
-    // MARK: - Stream Operations
-    
-    func streamInfo(_ message: String, context: [String: Any]? = nil) {
-        log(level: .info, category: .stream, message: message, context: context)
-    }
-    
-    func streamDebug(_ message: String, context: [String: Any]? = nil) {
-        log(level: .debug, category: .stream, message: message, context: context)
-    }
-    
-    // MARK: - Peripheral Operations
-    
-    func peripheralInfo(_ message: String, context: [String: Any]? = nil) {
-        log(level: .info, category: .peripheral, message: message, context: context)
-    }
-    
-    func peripheralDebug(_ message: String, context: [String: Any]? = nil) {
-        log(level: .debug, category: .peripheral, message: message, context: context)
-    }
-    
-    func peripheralNotice(_ message: String, context: [String: Any]? = nil) {
-        log(level: .notice, category: .peripheral, message: message, context: context)
-    }
-}

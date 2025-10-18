@@ -15,7 +15,6 @@ public struct BluetoothService: Sendable {
     public let isPrimary: Bool
     public let characteristics: [BluetoothCharacteristic]?
     
-    // Internal reference to CB object
     internal let cbService: CBService
     
     init(cbService: CBService, characteristics: [BluetoothCharacteristic]? = nil) {
