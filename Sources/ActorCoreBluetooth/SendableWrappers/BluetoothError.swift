@@ -20,6 +20,7 @@ public enum BluetoothError: Error, Sendable {
     case characteristicNotFound
     case scanTimeout
     case operationCancelled
+    case operationInProgress
     
     case bluetoothPoweredOff
     case bluetoothUnauthorized

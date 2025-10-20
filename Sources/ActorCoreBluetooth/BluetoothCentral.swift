@@ -20,6 +20,7 @@ public final class BluetoothCentral {
     
     // Connection management
     private var connectionOperations: [UUID: TimedOperation<CBPeripheral>] = [:]
+    private var disconnectionOperations: [UUID: TimedOperation<Void>] = [:]
     private var scanOperation: TimedOperation<[DiscoveredPeripheral]>?
     private var discoveredPeripherals: [DiscoveredPeripheral] = []
     
@@ -200,6 +201,14 @@ public final class BluetoothCentral {
             connectionOperations.removeValue(forKey: peripheral.identifier)
         }
         
+        // Check for pending disconnection operation
+        if disconnectionOperations[peripheral.identifier] != nil {
+            logger?.connectionWarning("Cannot connect: disconnection in progress", context: [
+                "peripheralID": peripheral.identifier.uuidString
+            ])
+            throw BluetoothError.operationInProgress
+        }
+        
         logger?.logConnection(
             event: "Connecting to peripheral",
             peripheral: peripheral.name ?? "Unknown",
@@ -287,6 +296,14 @@ public final class BluetoothCentral {
             connectionOperations.removeValue(forKey: peripheral.identifier)
         }
         
+        // Check for pending disconnection operation
+        if disconnectionOperations[peripheral.identifier] != nil {
+            logger?.connectionWarning("Cannot reconnect: disconnection in progress", context: [
+                "peripheralID": peripheral.identifier.uuidString
+            ])
+            throw BluetoothError.operationInProgress
+        }
+        
         let peripheralID = peripheral.identifier
         logger?.connectionInfo("Attempting reconnection", context: [
             "peripheralName": peripheral.name ?? "Unknown",
@@ -338,7 +355,7 @@ public final class BluetoothCentral {
     }
     
     /// Disconnect from any connected peripheral
-    public func disconnect(_ peripheralID: UUID) async throws {
+    public func disconnect(_ peripheralID: UUID, timeout: TimeInterval? = nil) async throws {
         try await ensureCentralManagerInitialized()
         
         guard let cbCentralManager = cbCentralManager else {
@@ -353,16 +370,70 @@ public final class BluetoothCentral {
             throw BluetoothError.peripheralNotFound
         }
         
-        logger?.connectionInfo("Disconnecting from peripheral", context: [
+        // Check for existing disconnection operation
+        if disconnectionOperations[peripheralID] != nil {
+            logger?.connectionWarning("Cannot disconnect: disconnection already in progress", context: [
+                "peripheralID": peripheralID.uuidString
+            ])
+            throw BluetoothError.operationInProgress
+        }
+        
+        // Check if already disconnected
+        if cbPeripheral.state == .disconnected {
+            logger?.connectionNotice("Peripheral already disconnected", context: [
+                "peripheralID": peripheralID.uuidString
+            ])
+            // Clean up our registry and return immediately
+            connectedPeripherals.removeValue(forKey: peripheralID)
+            return
+        }
+        
+        logger?.logConnection(
+            event: "Disconnecting from peripheral",
+            peripheral: cbPeripheral.name ?? "Unknown",
+            peripheralID: peripheralID,
+            context: timeout.map { ["timeout": $0] }
+        )
+        
+        try await withCheckedThrowingContinuation { continuation in
+            let disconnection = TimedOperation<Void>(
+                operationName: "Disconnect from \(peripheralID)",
+                logger: logger
+            )
+            disconnection.setup(continuation)
+            disconnectionOperations[peripheralID] = disconnection
+            
+            if let timeout {
+                logger?.internalDebug("Setting disconnection timeout", context: [
+                    "peripheralID": peripheralID.uuidString,
+                    "timeout": timeout
+                ])
+                disconnection.setTimeoutTask(timeout: timeout, onTimeout: { [weak self] () -> Void in
+                    self?.logger?.logTimeout(
+                        operation: "Disconnection",
+                        timeout: timeout,
+                        context: ["peripheralID": peripheralID.uuidString]
+                    )
+                    self?.disconnectionOperations.removeValue(forKey: peripheralID)
+                })
+            }
+            
+            logger?.internalDebug("Calling CBCentralManager.cancelPeripheralConnection", context: [
+                "peripheralID": peripheralID.uuidString
+            ])
+            cbCentralManager.cancelPeripheralConnection(cbPeripheral)
+        }
+        
+        logger?.connectionNotice("Successfully disconnected", context: [
+            "peripheralName": cbPeripheral.name ?? "Unknown",
             "peripheralID": peripheralID.uuidString
         ])
-        cbCentralManager.cancelPeripheralConnection(cbPeripheral)
     }
     
     /// Disconnect using connected peripheral object
-    public func disconnect(_ peripheral: ConnectedPeripheral) async throws {
+    public func disconnect(_ peripheral: ConnectedPeripheral, timeout: TimeInterval? = nil) async throws {
         logger?.internalDebug("Disconnecting peripheral via ConnectedPeripheral object")
-        try await disconnect(peripheral.identifier)
+        try await disconnect(peripheral.identifier, timeout: timeout)
     }
     
     /// Get list of currently connected peripheral IDs
@@ -485,6 +556,26 @@ public final class BluetoothCentral {
             }
         }
         
+        // Clean up any pending operations
+        let pendingConnections = connectionOperations.count
+        let pendingDisconnections = disconnectionOperations.count
+        
+        if pendingConnections > 0 {
+            logger?.internalDebug("Cleaning up pending connection operations", context: ["count": pendingConnections])
+            for (_, operation) in connectionOperations {
+                operation.resumeOnce(with: .failure(BluetoothError.operationCancelled))
+            }
+            connectionOperations.removeAll()
+        }
+        
+        if pendingDisconnections > 0 {
+            logger?.internalDebug("Cleaning up pending disconnection operations", context: ["count": pendingDisconnections])
+            for (_, operation) in disconnectionOperations {
+                operation.resumeOnce(with: .failure(BluetoothError.operationCancelled))
+            }
+            disconnectionOperations.removeAll()
+        }
+        
         // Clear peripheral registry
         connectedPeripherals.removeAll()
         
@@ -534,6 +625,22 @@ public final class BluetoothCentral {
                 ])
             }
             
+            // Handle pending disconnection operations (successful disconnection)
+            if let disconnection = disconnectionOperations[peripheralID] {
+                logger?.internalDebug("Found pending disconnection operation", context: [
+                    "peripheralID": peripheralID.uuidString,
+                    "state": newState.debugDescription
+                ])
+                disconnectionOperations.removeValue(forKey: peripheralID)
+                
+                logger?.connectionNotice("Completing disconnection operation with success", context: [
+                    "peripheralName": cbPeripheral.name as Any,
+                    "peripheralID": peripheralID.uuidString
+                ])
+                disconnection.resumeOnce(with: .success(()))
+            }
+            
+            // Handle pending connection operations (failed connection)
             if let connection = connectionOperations[peripheralID] {
                 // If there was a pending connection and we got disconnected, it failed
                 let connectionError = error ?? BluetoothError.connectionFailed
@@ -542,6 +649,7 @@ public final class BluetoothCentral {
                     "peripheralID": peripheralID.uuidString,
                     "error": connectionError.localizedDescription
                 ])
+                connectionOperations.removeValue(forKey: peripheralID)
                 connection.resumeOnce(with: .failure(connectionError))
             }
             
@@ -580,14 +688,16 @@ public final class BluetoothCentral {
         // Log final state
         let connectedCount = connectedPeripherals.count
         let monitoringCount = connectionStateStreams.count
-        let pendingCount = connectionOperations.count
+        let pendingConnectionsCount = connectionOperations.count
+        let pendingDisconnectionsCount = disconnectionOperations.count
         
         logger?.internalDebug("State change processing completed", context: [
             "peripheralID": peripheralID.uuidString,
             "finalState": newState.debugDescription,
             "connectedPeripherals": connectedCount,
             "activeMonitors": monitoringCount,
-            "pendingConnections": pendingCount
+            "pendingConnections": pendingConnectionsCount,
+            "pendingDisconnections": pendingDisconnectionsCount
         ])
     }
     
