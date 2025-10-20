@@ -127,7 +127,7 @@ public final class BluetoothCentral {
             self.scanOperation = scan
             self.discoveredPeripherals = []
             
-            if let timeout = timeout {
+            if let timeout {
                 logger?.internalDebug("Setting scan timeout", context: ["timeout": timeout])
                 scan.setTimeoutTask(timeout: timeout) { [weak self] () -> [DiscoveredPeripheral] in
                     guard let self else { return [] }
@@ -224,7 +224,7 @@ public final class BluetoothCentral {
             connection.setup(continuation)
             connectionOperations[peripheral.identifier] = connection
             
-            if let timeout = timeout {
+            if let timeout {
                 logger?.internalDebug("Setting connection timeout", context: [
                     "peripheralID": peripheral.identifier.uuidString,
                     "timeout": timeout
@@ -494,30 +494,37 @@ public final class BluetoothCentral {
     // MARK: - Internal Delegate Handling Methods
     
     /// Handle peripheral state changes, managing both operation completion and state monitoring
-    internal func handlePeripheralStateChange(for peripheralID: UUID, newState: PeripheralState, cbPeripheral: CBPeripheral? = nil, error: Error? = nil) {
-        let peripheralName = cbPeripheral?.name ?? connectedPeripherals[peripheralID]?.name ?? "Unknown"
+    internal func handlePeripheralStateChange(for peripheralID: UUID, newState: PeripheralState, cbPeripheral: CBPeripheral, error: Error? = nil) {
         
         logger?.connectionInfo("Peripheral state changed", context: [
-            "peripheralName": peripheralName,
+            "peripheralName": cbPeripheral.name as Any,
             "peripheralID": peripheralID.uuidString,
             "newState": newState.debugDescription,
             "error": error?.localizedDescription as Any
         ])
         
-        // 1. Update internal state tracking
+        // Update internal state tracking
         switch newState {
         case .connected:
-            if let cbPeripheral = cbPeripheral {
-                connectedPeripherals[peripheralID] = cbPeripheral
-                logger?.internalDebug("Registered peripheral in connected registry", context: [
-                    "peripheralID": peripheralID.uuidString
-                ])
-            } else {
-                logger?.internalWarning("Connected state change without CBPeripheral reference", context: [
-                    "peripheralID": peripheralID.uuidString
-                ])
-            }
+            connectedPeripherals[peripheralID] = cbPeripheral
+            logger?.internalDebug("Registered peripheral in connected registry", context: [
+                "peripheralID": peripheralID.uuidString
+            ])
             
+            if let connection = connectionOperations[peripheralID] {
+                logger?.internalDebug("Found pending connection operation", context: [
+                    "peripheralID": peripheralID.uuidString,
+                    "state": newState.debugDescription
+                ])
+                connectionOperations.removeValue(forKey: peripheralID)
+                
+                logger?.connectionNotice("Completing connection operation with success", context: [
+                    "peripheralName": cbPeripheral.name as Any,
+                    "peripheralID": peripheralID.uuidString
+                ])
+                connection.resumeOnce(with: .success(cbPeripheral))
+            }
+        
         case .disconnected:
             let wasConnected = connectedPeripherals[peripheralID] != nil
             connectedPeripherals.removeValue(forKey: peripheralID)
@@ -527,6 +534,17 @@ public final class BluetoothCentral {
                 ])
             }
             
+            if let connection = connectionOperations[peripheralID] {
+                // If there was a pending connection and we got disconnected, it failed
+                let connectionError = error ?? BluetoothError.connectionFailed
+                logger?.connectionWarning("Completing connection operation with failure", context: [
+                    "peripheralName": cbPeripheral.name as Any,
+                    "peripheralID": peripheralID.uuidString,
+                    "error": connectionError.localizedDescription
+                ])
+                connection.resumeOnce(with: .failure(connectionError))
+            }
+            
         case .connecting, .disconnecting:
             logger?.internalDebug("Transitional state - no registry changes", context: [
                 "peripheralID": peripheralID.uuidString,
@@ -534,7 +552,7 @@ public final class BluetoothCentral {
             ])
         }
         
-        // 2. Notify state monitors
+        // Notify state monitors
         let monitorCount = connectionStateStreams.values.count { $0.peripheralID == peripheralID }
         if monitorCount > 0 {
             logger?.streamDebug("Notifying connection state monitors", context: [
@@ -559,65 +577,7 @@ public final class BluetoothCentral {
             ])
         }
         
-        // 3. Complete any pending connection operations
-        if let connection = connectionOperations[peripheralID] {
-            logger?.internalDebug("Found pending connection operation", context: [
-                "peripheralID": peripheralID.uuidString,
-                "state": newState.debugDescription
-            ])
-            
-            connectionOperations.removeValue(forKey: peripheralID)
-            
-            switch newState {
-            case .connected:
-                if let cbPeripheral = cbPeripheral ?? connectedPeripherals[peripheralID] {
-                    logger?.connectionNotice("Completing connection operation with success", context: [
-                        "peripheralName": peripheralName,
-                        "peripheralID": peripheralID.uuidString
-                    ])
-                    connection.resumeOnce(with: .success(cbPeripheral))
-                } else {
-                    logger?.errorError("Connected state but no CBPeripheral available", context: [
-                        "peripheralID": peripheralID.uuidString
-                    ])
-                    let noPeripheralError = BluetoothError.invalidState
-                    connection.resumeOnce(with: .failure(noPeripheralError))
-                }
-                
-            case .disconnected:
-                // If there was a pending connection and we got disconnected, it failed
-                let connectionError = error ?? BluetoothError.connectionFailed
-                logger?.connectionWarning("Completing connection operation with failure", context: [
-                    "peripheralName": peripheralName,
-                    "peripheralID": peripheralID.uuidString,
-                    "error": connectionError.localizedDescription
-                ])
-                connection.resumeOnce(with: .failure(connectionError))
-                
-            case .connecting:
-                logger?.internalDebug("Connection in progress - not completing operation yet", context: [
-                    "peripheralID": peripheralID.uuidString
-                ])
-                // Put the operation back - we removed it prematurely
-                connectionOperations[peripheralID] = connection
-                
-            case .disconnecting:
-                logger?.internalDebug("Disconnection in progress - not completing connection operation", context: [
-                    "peripheralID": peripheralID.uuidString
-                ])
-                // This is unusual - why would we have a connection operation during disconnection?
-                // Complete with failure
-                let disconnectingError = BluetoothError.connectionFailed
-                connection.resumeOnce(with: .failure(disconnectingError))
-            }
-        } else {
-            logger?.internalDebug("No pending connection operation for peripheral", context: [
-                "peripheralID": peripheralID.uuidString,
-                "state": newState.debugDescription
-            ])
-        }
-        
-        // 4. Log final state
+        // Log final state
         let connectedCount = connectedPeripherals.count
         let monitoringCount = connectionStateStreams.count
         let pendingCount = connectionOperations.count
@@ -631,8 +591,7 @@ public final class BluetoothCentral {
         ])
     }
     
- 
-    
+     
     // Called by delegate proxy when peripheral is discovered
     internal func handlePeripheralDiscovered(_ peripheral: CBPeripheral, advertisementData: [String: Any], rssi: NSNumber) {
         let discoveredPeripheral = DiscoveredPeripheral(
@@ -689,7 +648,7 @@ public final class BluetoothCentral {
             connection.setup(continuation)
             connectionOperations[cbPeripheral.identifier] = connection
             
-            if let timeout = timeout {
+            if let timeout {
                 logger?.internalDebug("Setting reconnection timeout", context: [
                     "peripheralID": cbPeripheral.identifier.uuidString,
                     "timeout": timeout

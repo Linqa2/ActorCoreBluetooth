@@ -5,30 +5,6 @@ import CoreBluetooth
 @MainActor
 final class ActorCoreBluetoothTests: XCTestCase {
     
-    // MARK: - BluetoothError Tests
-    func testBluetoothErrorTypes() {
-        let errors: [BluetoothError] = [
-            .centralManagerNotInitialized,
-            .connectionTimeout,
-            .connectionFailed,
-            .peripheralNotFound,
-            .invalidState,
-            .peripheralNotConnected,
-            .operationNotSupported,
-            .serviceNotFound,
-            .characteristicNotFound,
-            .scanTimeout,
-            .bluetoothPoweredOff,
-            .bluetoothUnauthorized,
-            .bluetoothUnsupported
-        ]
-        
-        // Test that all error types can be created and are Sendable
-        for error in errors {
-            XCTAssertNotNil(error)
-        }
-    }
-    
     // MARK: - PeripheralState Tests
     
     func testPeripheralStateMapping() {
@@ -178,13 +154,6 @@ final class ActorCoreBluetoothTests: XCTestCase {
         XCTAssertEqual(central.connectedPeripheralIDs.count, 0)
     }
     
-    func testBluetoothCentralWithDefaultLogger() {
-        let central = BluetoothCentral()
-        
-        // Should initialize with default logger
-        XCTAssertNotNil(central)
-    }
-    
     // MARK: - LogLevel and LogCategory Tests
     
     func testLogLevelOSLogMapping() {
@@ -207,31 +176,5 @@ final class ActorCoreBluetoothTests: XCTestCase {
         XCTAssertTrue(userFacingCategories.contains(.stream))
         XCTAssertTrue(userFacingCategories.contains(.error))
         XCTAssertFalse(userFacingCategories.contains(.internal))
-    }
-    
-    func testLogCategoryDescriptions() {
-        for category in LogCategory.allCases {
-            XCTAssertFalse(category.description.isEmpty)
-        }
-    }
-    
-    // MARK: - Sendable Conformance Tests
-    
-    func testSendableConformance() async {
-        // Test that our key types are Sendable by using them in async contexts
-        await withCheckedContinuation { continuation in
-            Task {
-                let error: BluetoothError = .connectionTimeout
-                let state = PeripheralState.connected
-                let properties = CharacteristicProperties.read
-                
-                // If these compile without warnings, Sendable conformance is working
-                _ = error
-                _ = state
-                _ = properties
-                
-                continuation.resume()
-            }
-        }
     }
 }

@@ -84,7 +84,7 @@ public final class ConnectedPeripheral {
             discovery.setup(continuation)
             serviceDiscoveryOperation = discovery
             
-            if let timeout = timeout {
+            if let timeout {
                 logger?.internalDebug("Setting service discovery timeout", context: ["timeout": timeout])
                 discovery.setTimeoutTask(timeout: timeout, onTimeoutResult: { [weak self] in
                     guard let self else { return [] }
@@ -143,7 +143,7 @@ public final class ConnectedPeripheral {
             discovery.setup(continuation)
             characteristicDiscoveryOperations[key] = discovery
             
-            if let timeout = timeout {
+            if let timeout {
                 logger?.internalDebug("Setting characteristic discovery timeout", context: [
                     "timeout": timeout,
                     "serviceUUID": service.uuid
@@ -215,7 +215,7 @@ public final class ConnectedPeripheral {
             read.setup(continuation)
             characteristicReadOperations[key] = read
             
-            if let timeout = timeout {
+            if let timeout {
                 logger?.internalDebug("Setting read timeout", context: [
                     "timeout": timeout,
                     "characteristicUUID": characteristic.uuid
@@ -282,7 +282,7 @@ public final class ConnectedPeripheral {
             write.setup(continuation)
             characteristicWriteOperations[key] = write
             
-            if let timeout = timeout {
+            if let timeout {
                 logger?.internalDebug("Setting write timeout", context: [
                     "timeout": timeout,
                     "characteristicUUID": characteristic.uuid
@@ -379,7 +379,7 @@ public final class ConnectedPeripheral {
             notification.setup(continuation)
             notificationStateOperations[key] = notification
             
-            if let timeout = timeout {
+            if let timeout {
                 logger?.internalDebug("Setting notification state timeout", context: [
                     "timeout": timeout
                 ])
@@ -482,12 +482,12 @@ public final class ConnectedPeripheral {
     // MARK: - Convenience Methods
     
     /// Full service and characteristic discovery
-    public func discoverAllServicesAndCharacteristics(timeout: TimeInterval? = 10.0) async throws -> [BluetoothService] {
+    public func discoverServicesWithCharacteristics(serviceUUIDs: [String]? = nil, characteristicUUIDs: [String]? = nil, timeout: TimeInterval? = 10.0) async throws -> [BluetoothService] {
         logger?.peripheralInfo("Starting complete discovery", context: [
             "peripheralID": identifier.uuidString
         ])
         
-        let services = try await discoverServices(timeout: timeout)
+        let services = try await discoverServices(serviceUUIDs: serviceUUIDs, timeout: timeout)
         logger?.logServiceDiscovery(count: services.count, peripheralID: identifier)
         
         var servicesWithCharacteristics: [BluetoothService] = []
@@ -496,7 +496,7 @@ public final class ConnectedPeripheral {
             logger?.serviceDebug("Discovering characteristics for service", context: [
                 "serviceUUID": service.uuid
             ])
-            let characteristics = try await discoverCharacteristics(for: service, timeout: timeout)
+            let characteristics = try await discoverCharacteristics(for: service, characteristicUUIDs: characteristicUUIDs, timeout: timeout)
             logger?.characteristicDebug("Found characteristics for service", context: [
                 "serviceUUID": service.uuid,
                 "characteristicCount": characteristics.count
