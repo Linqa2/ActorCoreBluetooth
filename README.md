@@ -10,26 +10,26 @@
 
 A modern Swift Bluetooth library providing async/await APIs for CoreBluetooth using MainActor isolation. Built for Swift 6 with strict concurrency compliance and comprehensive logging.
 
-## ✨ Features
+## Features
 
 ### Core Features
-- **🔒 Swift 6 Ready**: Strict concurrency compliance with async/await APIs
-- **🧵 MainActor Isolation**: Thread-safe operations with MainActor enforcement
-- **⏱️ Comprehensive Timeouts**: All operations support configurable timeout handling
-- **📡 Stream-based Monitoring**: Real-time monitoring with AsyncStream
-- **📝 Built-in Logging**: Comprehensive logging system with multiple categories
-- **🔄 Reconnection Support**: Robust reconnection handling for dropped connections
+- **Swift 6 Ready**: Strict concurrency compliance with async/await APIs
+- **MainActor Isolation**: Thread-safe operations with MainActor enforcement
+- **Comprehensive Timeouts**: All operations support configurable timeout handling
+- **Stream-based Monitoring**: Real-time monitoring with AsyncStream
+- **Built-in Logging**: Comprehensive logging system with multiple categories
+- **Reconnection Support**: Robust reconnection handling for dropped connections
 
 ### Bluetooth Operations
-- **🔍 Device Scanning**: Flexible scanning with service filtering and timeout support
-- **🔗 Connection Management**: Reliable connection/disconnection with state monitoring
-- **🛠️ Service Discovery**: Complete service and characteristic discovery
-- **📖 Data Reading**: Characteristic value reading with timeout support
-- **✏️ Data Writing**: Both response-required and fire-and-forget writing
-- **🔔 Notifications**: Real-time characteristic value notifications
-- **📊 Real-time Monitoring**: Live streams for connection states and characteristic updates
+- **Device Scanning**: Flexible scanning with service filtering and timeout support
+- **Connection Management**: Reliable connection/disconnection with state monitoring
+- **Service Discovery**: Complete service and characteristic discovery
+- **Data Reading**: Characteristic value reading with timeout support
+- **Data Writing**: Both response-required and fire-and-forget writing
+- **Notifications**: Real-time characteristic value notifications
+- **Real-time Monitoring**: Live streams for connection states and characteristic updates
 
-## 📱 Platform Support
+## Platform Support
 
 | Platform | Minimum Version |
 |----------|----------------|
@@ -38,7 +38,7 @@ A modern Swift Bluetooth library providing async/await APIs for CoreBluetooth us
 | tvOS     | 15.0+          |
 | watchOS  | 8.0+           |
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Basic Usage
 
@@ -68,9 +68,9 @@ func connectToDevice() async throws {
 }
 ```
 
-## 📖 Detailed Features & Examples
+## Detailed Features & Examples
 
-### 🔍 Device Scanning
+### Device Scanning
 
 Scan for Bluetooth devices with flexible filtering options:
 
@@ -94,7 +94,7 @@ func scanForDevices() async throws {
 }
 ```
 
-### 🔗 Connection Management
+### Connection Management
 
 Robust connection handling with automatic state management:
 
@@ -122,7 +122,7 @@ func connectionExample() async throws {
 }
 ```
 
-### 🔄 One-Step Scan and Connect
+### One-Step Scan and Connect
 
 Convenient method for scanning and connecting in a single operation:
 
@@ -144,7 +144,7 @@ func scanAndConnect() async throws {
 }
 ```
 
-### 🛠️ Service and Characteristic Discovery
+### Service and Characteristic Discovery
 
 Complete discovery with flexible options:
 
@@ -184,7 +184,7 @@ func discoverServices(peripheral: ConnectedPeripheral) async throws {
 }
 ```
 
-### 📖 Reading Data
+### Reading Data
 
 Read characteristic values with proper error handling:
 
@@ -214,7 +214,7 @@ func readCharacteristics(peripheral: ConnectedPeripheral) async throws {
 }
 ```
 
-### ✏️ Writing Data
+### Writing Data
 
 Write data to characteristics with both response styles:
 
@@ -237,7 +237,7 @@ func writeToCharacteristic(peripheral: ConnectedPeripheral, characteristic: Blue
 }
 ```
 
-### 🔔 Notifications and Real-time Monitoring
+### Notifications and Real-time Monitoring
 
 Set up real-time notifications and monitor characteristic changes:
 
@@ -286,7 +286,7 @@ func monitorNotifications(peripheral: ConnectedPeripheral) async throws {
 }
 ```
 
-### 📊 Connection State Monitoring
+### Connection State Monitoring
 
 Monitor connection state changes in real-time:
 
@@ -330,7 +330,7 @@ func monitorConnectionState(central: BluetoothCentral, peripheralID: UUID) async
 }
 ```
 
-### 📝 Comprehensive Logging
+### Comprehensive Logging
 
 Built-in logging system with multiple categories and levels:
 
@@ -359,7 +359,7 @@ func setupLogging() {
 }
 ```
 
-## 📦 Installation
+## Installation
 
 ### Swift Package Manager
 
@@ -376,7 +376,7 @@ Or add it through Xcode:
 2. Enter: `https://github.com/Linqa2/ActorCoreBluetooth.git`
 3. Select version: `v0.1.0-alpha`
 
-## 🔧 Requirements
+## Requirements
 
 - **Swift**: 5.7+
 - **Xcode**: 14.0+
@@ -386,6 +386,6 @@ Or add it through Xcode:
   - tvOS 15.0+
   - watchOS 8.0+
 
-## 📄 License
+## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
