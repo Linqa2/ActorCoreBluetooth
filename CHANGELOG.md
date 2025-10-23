@@ -14,9 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0-alpha] - 2024-10-22
 
 ### Added
-- Initial release with core Bluetooth functionality
+- Initial release with core Bluetooth Central functionality
 - Swift 6 strict concurrency compliance with MainActor isolation
-- Comprehensive async/await APIs for all CoreBluetooth operations
+- Comprehensive async/await APIs for CoreBluetooth Central operations
 - Device scanning with service filtering and timeout support
 - Robust connection/disconnection management with state monitoring
 - Complete service and characteristic discovery
@@ -26,9 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Built-in logging system with multiple categories and levels
 - Timeout support for all operations
 - Reconnection support for dropped connections
-- Resource management with proper cleanup
-- Comprehensive error handling
-- Full test coverage for core functionality
+- **Central mode only** - does not support Bluetooth Peripheral mode
 
 ### Notes
 - APIs are subject to change until version 1.0.0

@@ -10,6 +10,8 @@
 
 A modern Swift Bluetooth library providing async/await APIs for CoreBluetooth using MainActor isolation. Built for Swift 6 with strict concurrency compliance and comprehensive logging.
 
+**Note: This library only supports Bluetooth Central mode** - for scanning, connecting to, and communicating with Bluetooth peripherals. It does not support Bluetooth Peripheral mode (advertising or acting as a peripheral).
+
 ## Features
 
 ### Core Features
