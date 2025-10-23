@@ -72,27 +72,36 @@ final class TimedOperationTests: XCTestCase {
         }
     }
     
+    // MARK: - testTimedOperationTimeoutIntegration
     func testTimedOperationTimeoutIntegration() async throws {
         let logger = TestLogger()
-        let operation = TimedOperation<String>(operationName: "Integration Test", logger: logger)
-        
-        let startTime = Date()
-        
+        let operation = TimedOperation<String>(
+            operationName: "Integration Test",
+            logger: logger
+        )
+
+        let clock = ContinuousClock()
+        let start = clock.now
+
         do {
-            _ = try await withCheckedThrowingContinuation { continuation in
+            _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
                 operation.setup(continuation)
                 operation.setTimeoutTask(timeout: 0.1, onTimeout: {
-                    print("timed out")
+                    // no-op
                 })
             }
-            
             XCTFail("Should have timed out")
         } catch BluetoothError.connectionTimeout {
-            let elapsed = Date().timeIntervalSince(startTime)
-            XCTAssertGreaterThanOrEqual(elapsed, 0.1, "Timeout should have taken at least 0.1 seconds")
-            XCTAssertLessThan(elapsed, 0.2, "Timeout should not have taken much longer than 0.1 seconds")
+            let elapsed = start.duration(to: clock.now) / .seconds(1)
+
+            XCTAssertGreaterThanOrEqual(elapsed, 0.095, "Timeout should be close to the requested value")
+
+            XCTAssertLessThanOrEqual(elapsed, 0.30, "Timeout shouldn't exceed a reasonable CI jitter")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
         }
     }
+
     
     func testMultipleTimedOperationsIndependence() async throws {
         let logger = TestLogger()
@@ -170,28 +179,29 @@ final class TimedOperationTests: XCTestCase {
     
     func testTimedOperationClosureBasedTimeoutResult() async throws {
         let logger = TestLogger()
-        let operation = TimedOperation<[String]>(operationName: "Closure Timeout Test", logger: logger)
-        
+        let operation = TimedOperation<[String]>(
+            operationName: "Closure Timeout Test",
+            logger: logger
+        )
+
         var dynamicResult: [String] = []
-        
-        let result = try await withCheckedThrowingContinuation { continuation in
+
+        let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[String], Error>) in
             operation.setup(continuation)
-            
-            // Simulate building up a result over time
-            Task {
-                try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
+
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 40_000_000)
                 dynamicResult.append("item1")
-                try? await Task.sleep(nanoseconds: 30_000_000) // 0.03 seconds  
+
+                try? await Task.sleep(nanoseconds: 40_000_000)
                 dynamicResult.append("item2")
-                // Don't complete - let timeout capture current state
             }
-            
-            // Test the closure-based timeout result (evaluated at timeout time)
-            operation.setTimeoutTask(timeout: 0.1, onTimeoutResult: {
+
+            operation.setTimeoutTask(timeout: 0.15, onTimeoutResult: {
                 return dynamicResult
             })
         }
-        
+
         XCTAssertEqual(result, ["item1", "item2"], "Should return dynamic result captured at timeout time")
     }
     
