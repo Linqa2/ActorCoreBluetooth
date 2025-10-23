@@ -23,5 +23,6 @@ let package = Package(
             name: "ActorCoreBluetoothTests",
             dependencies: ["ActorCoreBluetooth"]
         ),
-    ]
+    ],
+    swiftLanguageModes: [.v6]
 )

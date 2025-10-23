@@ -588,7 +588,7 @@ public final class BluetoothCentral {
     internal func handlePeripheralStateChange(for peripheralID: UUID, newState: PeripheralState, cbPeripheral: CBPeripheral, error: Error? = nil) {
         
         logger?.connectionInfo("Peripheral state changed", context: [
-            "peripheralName": cbPeripheral.name as Any,
+            "peripheralName": cbPeripheral.name ?? "Unknown",
             "peripheralID": peripheralID.uuidString,
             "newState": newState.debugDescription,
             "error": error?.localizedDescription as Any
@@ -610,7 +610,7 @@ public final class BluetoothCentral {
                 connectionOperations.removeValue(forKey: peripheralID)
                 
                 logger?.connectionNotice("Completing connection operation with success", context: [
-                    "peripheralName": cbPeripheral.name as Any,
+                    "peripheralName": cbPeripheral.name ?? "Unknown",
                     "peripheralID": peripheralID.uuidString
                 ])
                 connection.resumeOnce(with: .success(cbPeripheral))
@@ -634,7 +634,7 @@ public final class BluetoothCentral {
                 disconnectionOperations.removeValue(forKey: peripheralID)
                 
                 logger?.connectionNotice("Completing disconnection operation with success", context: [
-                    "peripheralName": cbPeripheral.name as Any,
+                    "peripheralName": cbPeripheral.name ?? "Unknown",
                     "peripheralID": peripheralID.uuidString
                 ])
                 disconnection.resumeOnce(with: .success(()))
@@ -645,7 +645,7 @@ public final class BluetoothCentral {
                 // If there was a pending connection and we got disconnected, it failed
                 let connectionError = error ?? BluetoothError.connectionFailed
                 logger?.connectionWarning("Completing connection operation with failure", context: [
-                    "peripheralName": cbPeripheral.name as Any,
+                    "peripheralName": cbPeripheral.name ?? "Unknown",
                     "peripheralID": peripheralID.uuidString,
                     "error": connectionError.localizedDescription
                 ])
