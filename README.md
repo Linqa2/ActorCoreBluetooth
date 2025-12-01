@@ -12,6 +12,13 @@ A modern Swift Bluetooth library providing async/await APIs for CoreBluetooth us
 
 **Note: This library only supports Bluetooth Central mode** - for scanning, connecting to, and communicating with Bluetooth peripherals. It does not support Bluetooth Peripheral mode (advertising or acting as a peripheral).
 
+**⚠️ Concurrency Warning**
+
+ActorCoreBluetooth marks several CoreBluetooth types (`CBPeripheral`, `CBService`, etc.) as
+`@unchecked Sendable` to integrate them into Swift’s actor-based concurrency model.  
+Because of this, these types will appear `Sendable` in client code.  
+Keep this in mind when interacting with CoreBluetooth objects outside the library.
+
 ## Features
 
 ### Core Features
@@ -345,7 +352,7 @@ func setupLogging() {
     let central = BluetoothCentral(logger: OSLogBluetoothLogger())
     
     // Or create a custom logger
-    class CustomLogger: BluetoothLogger {
+    final class CustomLogger: BluetoothLogger {
         func log(level: LogLevel, category: LogCategory, message: String, context: [String: Any]?) {
             print("[\(level.rawValue.uppercased())] [\(category.rawValue)] \(message)")
             if let context = context {
