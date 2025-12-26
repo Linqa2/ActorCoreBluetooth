@@ -16,13 +16,13 @@ public struct DiscoveredPeripheral: Sendable {
     public let rssi: Int
     public let advertisementData: AdvertisementData
     
-    internal let cbPeripheral: CBPeripheral
+    internal let cbPeripheral: Unchecked<CBPeripheral>
     
     init(cbPeripheral: CBPeripheral, advertisementData: [String: Any], rssi: NSNumber) {
         self.identifier = cbPeripheral.identifier
         self.name = cbPeripheral.name
         self.rssi = rssi.intValue
         self.advertisementData = AdvertisementData(cbAdvertisementData: advertisementData)
-        self.cbPeripheral = cbPeripheral
+        self.cbPeripheral = Unchecked(cbPeripheral)
     }
 }

@@ -151,7 +151,7 @@ public final class ConnectedPeripheral {
                 discovery.setTimeoutTask(timeout: timeout, onTimeoutResult: { [weak self] in
                     guard let self else { return [] }
                     
-                    let currentCharacteristics = service.cbService.characteristics?.map { BluetoothCharacteristic(cbCharacteristic: $0) } ?? []
+                    let currentCharacteristics = service.cbService.value.characteristics?.map { BluetoothCharacteristic(cbCharacteristic: $0) } ?? []
                     self.logger?.characteristicInfo("Characteristic discovery completed (timeout reached)", context: [
                         "timeout": timeout,
                         "serviceUUID": service.uuid,
@@ -166,7 +166,7 @@ public final class ConnectedPeripheral {
             logger?.internalDebug("Calling CBPeripheral.discoverCharacteristics", context: [
                 "serviceUUID": service.uuid
             ])
-            cbPeripheral.discoverCharacteristics(cbCharacteristicUUIDs, for: service.cbService)
+            cbPeripheral.discoverCharacteristics(cbCharacteristicUUIDs, for: service.cbService.value)
         }
     }
     
@@ -234,7 +234,7 @@ public final class ConnectedPeripheral {
             logger?.internalDebug("Calling CBPeripheral.readValue", context: [
                 "characteristicUUID": characteristic.uuid
             ])
-            cbPeripheral.readValue(for: characteristic.cbCharacteristic)
+            cbPeripheral.readValue(for: characteristic.cbCharacteristic.value)
         }
     }
     
@@ -302,7 +302,7 @@ public final class ConnectedPeripheral {
                 "characteristicUUID": characteristic.uuid,
                 "dataLength": data.count
             ])
-            cbPeripheral.writeValue(data, for: characteristic.cbCharacteristic, type: .withResponse)
+            cbPeripheral.writeValue(data, for: characteristic.cbCharacteristic.value, type: .withResponse)
         }
     }
     
@@ -330,7 +330,7 @@ public final class ConnectedPeripheral {
         )
         
         // Write without response doesn't need continuation - fire and forget
-        cbPeripheral.writeValue(data, for: characteristic.cbCharacteristic, type: .withoutResponse)
+        cbPeripheral.writeValue(data, for: characteristic.cbCharacteristic.value, type: .withoutResponse)
         logger?.characteristicDebug("Write without response completed", context: [
             "characteristicUUID": characteristic.uuid
         ])
@@ -398,7 +398,7 @@ public final class ConnectedPeripheral {
                 "enabled": enabled,
                 "characteristicUUID": characteristic.uuid
             ])
-            cbPeripheral.setNotifyValue(enabled, for: characteristic.cbCharacteristic)
+            cbPeripheral.setNotifyValue(enabled, for: characteristic.cbCharacteristic.value)
         }
     }
     
@@ -503,7 +503,7 @@ public final class ConnectedPeripheral {
             ])
             
             let serviceWithCharacteristics = BluetoothService(
-                cbService: service.cbService,
+                cbService: service.cbService.value,
                 characteristics: characteristics
             )
             servicesWithCharacteristics.append(serviceWithCharacteristics)

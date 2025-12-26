@@ -15,12 +15,12 @@ public struct BluetoothService: Sendable {
     public let isPrimary: Bool
     public let characteristics: [BluetoothCharacteristic]?
     
-    internal let cbService: CBService
+    internal let cbService: Unchecked<CBService>
     
     init(cbService: CBService, characteristics: [BluetoothCharacteristic]? = nil) {
         self.uuid = cbService.uuid.uuidString
         self.isPrimary = cbService.isPrimary
         self.characteristics = characteristics
-        self.cbService = cbService
+        self.cbService = Unchecked(cbService)
     }
 }

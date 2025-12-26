@@ -15,12 +15,12 @@ public struct BluetoothCharacteristic: Sendable {
     public let properties: CharacteristicProperties
     public let value: Data?
     
-    internal let cbCharacteristic: CBCharacteristic
+    internal let cbCharacteristic: Unchecked<CBCharacteristic>
     
     init(cbCharacteristic: CBCharacteristic) {
         self.uuid = cbCharacteristic.uuid.uuidString
         self.properties = CharacteristicProperties(cbProperties: cbCharacteristic.properties)
         self.value = cbCharacteristic.value
-        self.cbCharacteristic = cbCharacteristic
+        self.cbCharacteristic = Unchecked(cbCharacteristic)
     }
 }
