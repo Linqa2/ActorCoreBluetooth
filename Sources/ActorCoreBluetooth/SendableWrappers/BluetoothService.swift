@@ -8,7 +8,6 @@
 
 import Foundation
 import CoreBluetooth
-internal import ActorCoreBluetoothRuntime
 
 /// Sendable wrapper for Bluetooth services
 public struct BluetoothService: Sendable {

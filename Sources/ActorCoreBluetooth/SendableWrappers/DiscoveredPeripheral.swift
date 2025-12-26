@@ -8,7 +8,6 @@
 
 import Foundation
 import CoreBluetooth
-internal import ActorCoreBluetoothRuntime
 
 /// Represents a discovered peripheral that can be connected to
 public struct DiscoveredPeripheral: Sendable {

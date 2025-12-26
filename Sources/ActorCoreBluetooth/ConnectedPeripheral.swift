@@ -7,7 +7,6 @@
 
 import Foundation
 import CoreBluetooth
-internal import ActorCoreBluetoothRuntime
 
 @MainActor
 public final class ConnectedPeripheral {

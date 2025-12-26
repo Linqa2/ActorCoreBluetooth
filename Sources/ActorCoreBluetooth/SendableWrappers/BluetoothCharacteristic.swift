@@ -8,7 +8,6 @@
 
 import Foundation
 import CoreBluetooth
-internal import ActorCoreBluetoothRuntime
 
 /// Sendable wrapper for Bluetooth characteristics
 public struct BluetoothCharacteristic: Sendable {

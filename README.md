@@ -6,11 +6,18 @@
 [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
 [![CI](https://github.com/Linqa2/ActorCoreBluetooth/actions/workflows/ci.yml/badge.svg)](https://github.com/Linqa2/ActorCoreBluetooth/actions)
 
-**⚠️ v0.1.1-alpha - APIs may change**
+**⚠️ v0.1.0-alpha - APIs may change**
 
 A modern Swift Bluetooth library providing async/await APIs for CoreBluetooth using MainActor isolation. Built for Swift 6 with strict concurrency compliance and comprehensive logging.
 
 **Note: This library only supports Bluetooth Central mode** - for scanning, connecting to, and communicating with Bluetooth peripherals. It does not support Bluetooth Peripheral mode (advertising or acting as a peripheral).
+
+**⚠️ Concurrency Warning**
+
+ActorCoreBluetooth marks several CoreBluetooth types (`CBPeripheral`, `CBService`, etc.) as
+`@unchecked Sendable` to integrate them into Swift’s actor-based concurrency model.  
+Because of this, these types will appear `Sendable` in client code.  
+Keep this in mind when interacting with CoreBluetooth objects outside the library.
 
 ## Features
 
@@ -369,14 +376,14 @@ Add this to your `Package.swift` file:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/Linqa2/ActorCoreBluetooth.git", exact: "v0.1.1-alpha")
+    .package(url: "https://github.com/Linqa2/ActorCoreBluetooth.git", exact: "v0.1.0-alpha")
 ]
 ```
 
 Or add it through Xcode:
 1. File → Add Package Dependencies
 2. Enter: `https://github.com/Linqa2/ActorCoreBluetooth.git`
-3. Select version: `v0.1.1-alpha`
+3. Select version: `v0.1.0-alpha`
 
 ## Requirements
 
@@ -387,10 +394,6 @@ Or add it through Xcode:
   - macOS 12.0+  
   - tvOS 15.0+
   - watchOS 8.0+
-  
-## Related resources
-
-[Modernizing CoreBluetooth with Swift 6 Concurrency: The ActorCoreBluetooth Story](https://medium.com/@konst.polin/modernizing-corebluetooth-with-swift-6-concurrency-the-actorcorebluetooth-story-c5ff95b7d68a)
 
 ## License
 
