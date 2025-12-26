@@ -19,7 +19,7 @@ public final class BluetoothCentral {
     private let logger: BluetoothLogger?
     
     // Connection management
-    private var connectionOperations: [UUID: TimedOperation<CBPeripheral>] = [:]
+    private var connectionOperations: [UUID: TimedOperation<Unchecked<CBPeripheral>>] = [:]
     private var disconnectionOperations: [UUID: TimedOperation<Void>] = [:]
     private var scanOperation: TimedOperation<[DiscoveredPeripheral]>?
     private var discoveredPeripherals: [DiscoveredPeripheral] = []
@@ -196,7 +196,7 @@ public final class BluetoothCentral {
             ])
             
             // Cancel the old attempt
-            cbCentralManager.cancelPeripheralConnection(peripheral.cbPeripheral)
+            cbCentralManager.cancelPeripheralConnection(peripheral.cbPeripheral.value)
             connection.resumeOnce(with: .failure(BluetoothError.operationCancelled))
             connectionOperations.removeValue(forKey: peripheral.identifier)
         }
@@ -217,16 +217,16 @@ public final class BluetoothCentral {
         )
         
         // Check if already connected
-        if peripheral.cbPeripheral.state == .connected {
+        if peripheral.cbPeripheral.value.state == .connected {
             logger?.connectionNotice("Peripheral already connected, returning existing connection", context: [
                 "peripheralID": peripheral.identifier.uuidString
             ])
-            connectedPeripherals[peripheral.identifier] = peripheral.cbPeripheral
-            return ConnectedPeripheral(cbPeripheral: peripheral.cbPeripheral, logger: logger)
+            connectedPeripherals[peripheral.identifier] = peripheral.cbPeripheral.value
+            return ConnectedPeripheral(cbPeripheral: peripheral.cbPeripheral.value, logger: logger)
         }
         
-        let cbPeripheral = try await withCheckedThrowingContinuation { continuation in
-            let connection = TimedOperation<CBPeripheral>(
+        let wrappedPeripheral = try await withCheckedThrowingContinuation { continuation in
+            let connection = TimedOperation<Unchecked<CBPeripheral>>(
                 operationName: "Connect to \(peripheral.identifier)",
                 logger: logger
             )
@@ -244,7 +244,7 @@ public final class BluetoothCentral {
                         timeout: timeout,
                         context: ["peripheralID": peripheral.identifier.uuidString]
                     )
-                    cbCentralManager.cancelPeripheralConnection(peripheral.cbPeripheral)
+                    cbCentralManager.cancelPeripheralConnection(peripheral.cbPeripheral.value)
                     self?.connectionOperations.removeValue(forKey: peripheral.identifier)
                 }
             }
@@ -252,9 +252,10 @@ public final class BluetoothCentral {
             logger?.internalDebug("Calling CBCentralManager.connect", context: [
                 "peripheralID": peripheral.identifier.uuidString
             ])
-            cbCentralManager.connect(peripheral.cbPeripheral, options: nil)
+            cbCentralManager.connect(peripheral.cbPeripheral.value, options: nil)
         }
         
+        let cbPeripheral = wrappedPeripheral.value
         logger?.connectionNotice("Successfully connected", context: [
             "peripheralName": peripheral.name ?? "Unknown",
             "peripheralID": peripheral.identifier.uuidString
@@ -613,7 +614,7 @@ public final class BluetoothCentral {
                     "peripheralName": cbPeripheral.name ?? "Unknown",
                     "peripheralID": peripheralID.uuidString
                 ])
-                connection.resumeOnce(with: .success(cbPeripheral))
+                connection.resumeOnce(with: .success(Unchecked(cbPeripheral)))
             }
         
         case .disconnected:
@@ -750,8 +751,8 @@ public final class BluetoothCentral {
             return ConnectedPeripheral(cbPeripheral: cbPeripheral, logger: logger)
         }
         
-        let connectedPeripheral = try await withCheckedThrowingContinuation { continuation in
-            let connection = TimedOperation<CBPeripheral>(
+        let wrappedPeripheral = try await withCheckedThrowingContinuation { continuation in
+            let connection = TimedOperation<Unchecked<CBPeripheral>>(
                 operationName: "Reconnect to \(cbPeripheral.identifier)",
                 logger: logger
             )
@@ -780,6 +781,7 @@ public final class BluetoothCentral {
             cbCentralManager.connect(cbPeripheral, options: nil)
         }
         
+        let connectedPeripheral = wrappedPeripheral.value
         logger?.connectionNotice("Successfully reconnected", context: [
             "peripheralName": cbPeripheral.name ?? originalName ?? "Unknown",
             "peripheralID": cbPeripheral.identifier.uuidString
