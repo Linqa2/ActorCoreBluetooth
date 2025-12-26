@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Extensive testing on Bluetooth hardware (Nordic nRF52840 Dongle)
 - API stabilization for 1.0.0 release
 
+## [0.1.1-alpha] - 2025-01-08
+
+### Changed
+- **Architecture refactoring**: Split package into two Swift Package Manager targets
+  - `ActorCoreBluetoothRuntime` (internal) - Contains all `@unchecked Sendable` conformances for CoreBluetooth types
+  - `ActorCoreBluetooth` (public) - Facade target that uses `internal import` to prevent conformance leakage
+- `@unchecked Sendable` conformances for CoreBluetooth types now isolated to runtime target
+- Runtime module is internal to the public facade, preventing conformances from leaking to client code
+
 ## [0.1.0-alpha] - 2024-10-22
 
 ### Added

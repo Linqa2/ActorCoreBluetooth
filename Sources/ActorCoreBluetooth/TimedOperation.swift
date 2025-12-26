@@ -7,6 +7,7 @@
 //
 
 import Foundation
+internal import ActorCoreBluetoothRuntime
 
 /// Generic timed operation for managing continuations with timeout support
 @MainActor

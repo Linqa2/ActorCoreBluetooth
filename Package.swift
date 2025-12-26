@@ -17,8 +17,26 @@ let package = Package(
             targets: ["ActorCoreBluetooth"]),
     ],
     targets: [
+        // Internal runtime target - contains all @unchecked Sendable conformances
         .target(
-            name: "ActorCoreBluetooth"),
+            name: "ActorCoreBluetoothRuntime",
+            swiftSettings: [
+                .enableUpcomingFeature("StrictConcurrency")
+            ]
+        ),
+        
+        // Public facade target - uses internal import of runtime module
+        // to ensure @unchecked Sendable conformances do not leak to clients.
+        .target(
+            name: "ActorCoreBluetooth",
+            dependencies: [
+                .target(name: "ActorCoreBluetoothRuntime")
+            ],
+            swiftSettings: [
+                .enableUpcomingFeature("StrictConcurrency")
+            ]
+        ),
+        
         .testTarget(
             name: "ActorCoreBluetoothTests",
             dependencies: ["ActorCoreBluetooth"]
