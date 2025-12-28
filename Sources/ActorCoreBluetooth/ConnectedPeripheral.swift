@@ -30,6 +30,7 @@ public final class ConnectedPeripheral {
     private var serviceDiscoveryStreams: [UUID: AsyncStream<[BluetoothService]>.Continuation] = [:]
     private var characteristicValueStreams: [UUID: AsyncStream<(BluetoothCharacteristic, Data?)>.Continuation] = [:]
     private var notificationStreams: [UUID: AsyncStream<(BluetoothCharacteristic, Data?)>.Continuation] = [:]
+    private var rssiStreams: [UUID: AsyncStream<Int>.Continuation] = [:]
     
     internal init(cbPeripheral: CBPeripheral, logger: BluetoothLogger?) {
         self.identifier = cbPeripheral.identifier
@@ -479,6 +480,47 @@ public final class ConnectedPeripheral {
         notificationStreams.removeValue(forKey: monitorID)
     }
     
+    /// Create monitor for RSSI updates
+    public func createRSSIMonitor() -> (stream: AsyncStream<Int>, monitorID: UUID) {
+        let monitorID = UUID()
+        
+        logger?.streamInfo("Creating RSSI monitor", context: [
+            "peripheralID": identifier.uuidString,
+            "monitorID": monitorID.uuidString
+        ])
+        
+        let stream = AsyncStream<Int> { continuation in
+            rssiStreams[monitorID] = continuation
+        }
+        
+        return (stream, monitorID)
+    }
+    
+    /// Stop monitoring RSSI updates
+    public func stopRSSIMonitoring(_ monitorID: UUID) {
+        logger?.streamInfo("Stopping RSSI monitor", context: [
+            "monitorID": monitorID.uuidString
+        ])
+        rssiStreams[monitorID]?.finish()
+        rssiStreams.removeValue(forKey: monitorID)
+    }
+    
+    /// Read RSSI value once
+    public func readRSSI() throws {
+        guard cbPeripheral.state == .connected else {
+            logger?.errorError("Cannot read RSSI: peripheral not connected", context: [
+                "peripheralID": identifier.uuidString
+            ])
+            throw BluetoothError.peripheralNotConnected
+        }
+        
+        logger?.peripheralInfo("Reading RSSI", context: [
+            "peripheralID": identifier.uuidString
+        ])
+        
+        cbPeripheral.readRSSI()
+    }
+    
     // MARK: - Convenience Methods
     
     /// Full service and characteristic discovery
@@ -684,6 +726,27 @@ public final class ConnectedPeripheral {
         }
     }
     
+    // Called by delegate proxy when RSSI is read
+    internal func handleRSSIUpdate(rssi: NSNumber, error: Error?) {
+        if let error = error {
+            logger?.errorError("RSSI read failed", context: [
+                "peripheralID": identifier.uuidString,
+                "error": error.localizedDescription
+            ])
+        } else {
+            let rssiValue = rssi.intValue
+            logger?.peripheralInfo("RSSI updated", context: [
+                "peripheralID": identifier.uuidString,
+                "rssi": rssiValue
+            ])
+            
+            // Notify all RSSI streams
+            for continuation in rssiStreams.values {
+                continuation.yield(rssiValue)
+            }
+        }
+    }
+    
     /// Cancel all pending operations - called during disconnection
     internal func cancelAllPendingOperations() {
         logger?.peripheralInfo("Cancelling all pending operations due to disconnection", context: [
@@ -780,5 +843,12 @@ private final class ConnectedPeripheralDelegateProxy: NSObject, @preconcurrency 
             "characteristicUUID": characteristic.uuid.uuidString
         ])
         self.peripheral?.handleNotificationStateUpdate(for: characteristic, error: error)
+    }
+    
+    func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
+        logger?.internalDebug("CBPeripheralDelegate.didReadRSSI called", context: [
+            "rssi": RSSI.intValue
+        ])
+        self.peripheral?.handleRSSIUpdate(rssi: RSSI, error: error)
     }
 }
