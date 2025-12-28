@@ -147,6 +147,35 @@ func scanAndConnect() async throws {
 }
 ```
 
+### Retrieving System-Connected Peripherals
+
+Connect to peripherals that are already connected to the system by other apps or system services:
+
+```swift
+@MainActor
+func retrieveConnectedPeripherals() async throws {
+    let central = BluetoothCentral()
+    
+    // Retrieve peripherals already connected to Heart Rate service
+    let connectedPeripherals = try await central.retrieveConnectedPeripherals(
+        withServices: ["180D"], // Heart Rate service UUID
+        timeout: 10.0
+    )
+    
+    // Process all successfully connected peripherals
+    for peripheral in connectedPeripherals {
+        print("Connected to system peripheral: \(peripheral.name ?? "Unknown")")
+        
+        // Work with the peripheral normally
+        let services = try await peripheral.discoverServices(timeout: 5.0)
+        print("Discovered \(services.count) services")
+    }
+    
+    // Note: This method uses best-effort approach - if one peripheral fails to connect,
+    // it will log the error and continue with the remaining peripherals
+}
+```
+
 ### Service and Characteristic Discovery
 
 Complete discovery with flexible options:
