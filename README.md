@@ -456,6 +456,16 @@ Or add it through Xcode:
 
 [Modernizing CoreBluetooth with Swift 6 Concurrency: The ActorCoreBluetooth Story](https://medium.com/@konst.polin/modernizing-corebluetooth-with-swift-6-concurrency-the-actorcorebluetooth-story-c5ff95b7d68a)
 
+## Contributing
+
+ActorCoreBluetooth is actively evolving, and contributions are welcome.
+
+If you have an idea for a feature, API improvement, or design change,
+please start a GitHub Discussion.
+
+Small PRs and experiments are always welcome as well.
+See `CONTRIBUTING.md` for more details.
+
 
 ## License
 
