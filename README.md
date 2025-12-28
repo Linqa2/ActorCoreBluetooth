@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
 [![CI](https://github.com/Linqa2/ActorCoreBluetooth/actions/workflows/ci.yml/badge.svg)](https://github.com/Linqa2/ActorCoreBluetooth/actions)
 
-**⚠️ v0.1.0-alpha - APIs may change**
+**⚠️ v0.1.1-alpha - APIs may change**
 
 A modern Swift Bluetooth library providing async/await APIs for CoreBluetooth using MainActor isolation. Built for Swift 6 with strict concurrency compliance and comprehensive logging.
 
@@ -433,14 +433,14 @@ Add this to your `Package.swift` file:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/Linqa2/ActorCoreBluetooth.git", exact: "v0.1.0-alpha")
+    .package(url: "https://github.com/Linqa2/ActorCoreBluetooth.git", exact: "v0.1.1-alpha")
 ]
 ```
 
 Or add it through Xcode:
 1. File → Add Package Dependencies
 2. Enter: `https://github.com/Linqa2/ActorCoreBluetooth.git`
-3. Select version: `v0.1.0-alpha`
+3. Select version: `v0.1.1-alpha`
 
 ## Requirements
 
@@ -455,6 +455,16 @@ Or add it through Xcode:
 ## Related resources
 
 [Modernizing CoreBluetooth with Swift 6 Concurrency: The ActorCoreBluetooth Story](https://medium.com/@konst.polin/modernizing-corebluetooth-with-swift-6-concurrency-the-actorcorebluetooth-story-c5ff95b7d68a)
+
+## Contributing
+
+ActorCoreBluetooth is actively evolving, and contributions are welcome.
+
+If you have an idea for a feature, API improvement, or design change,
+please start a GitHub Discussion.
+
+Small PRs and experiments are always welcome as well.
+See `CONTRIBUTING.md` for more details.
 
 
 ## License

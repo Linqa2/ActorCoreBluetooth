@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Extensive testing on Bluetooth hardware (Nordic nRF52840 Dongle)
 - API stabilization for 1.0.0 release
 
+## [0.1.1-alpha] - 2024-12-27
+
+### Added
+- **Refactor:** Retroactive @unchecked Sendable conformances replaced with transport-level wrapper
+- Added RSSI Reading Support with Async/Await API
+- Added System-Connected Peripherals Retrieval
+
 ## [0.1.0-alpha] - 2024-10-22
 
 ### Added
