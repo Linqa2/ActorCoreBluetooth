@@ -25,12 +25,12 @@ public final class ConnectedPeripheral {
     private var characteristicReadOperations: [String: TimedOperation<Data?>] = [:]
     private var characteristicWriteOperations: [String: TimedOperation<Void>] = [:]
     private var notificationStateOperations: [String: TimedOperation<Void>] = [:]
+    private var rssiReadOperation: TimedOperation<Int>?
     
     // Stream management for peripheral-level events
     private var serviceDiscoveryStreams: [UUID: AsyncStream<[BluetoothService]>.Continuation] = [:]
     private var characteristicValueStreams: [UUID: AsyncStream<(BluetoothCharacteristic, Data?)>.Continuation] = [:]
     private var notificationStreams: [UUID: AsyncStream<(BluetoothCharacteristic, Data?)>.Continuation] = [:]
-    private var rssiStreams: [UUID: AsyncStream<Int>.Continuation] = [:]
     
     internal init(cbPeripheral: CBPeripheral, logger: BluetoothLogger?) {
         self.identifier = cbPeripheral.identifier
@@ -480,33 +480,10 @@ public final class ConnectedPeripheral {
         notificationStreams.removeValue(forKey: monitorID)
     }
     
-    /// Create monitor for RSSI updates
-    public func createRSSIMonitor() -> (stream: AsyncStream<Int>, monitorID: UUID) {
-        let monitorID = UUID()
-        
-        logger?.streamInfo("Creating RSSI monitor", context: [
-            "peripheralID": identifier.uuidString,
-            "monitorID": monitorID.uuidString
-        ])
-        
-        let stream = AsyncStream<Int> { continuation in
-            rssiStreams[monitorID] = continuation
-        }
-        
-        return (stream, monitorID)
-    }
+    // MARK: - RSSI Operations
     
-    /// Stop monitoring RSSI updates
-    public func stopRSSIMonitoring(_ monitorID: UUID) {
-        logger?.streamInfo("Stopping RSSI monitor", context: [
-            "monitorID": monitorID.uuidString
-        ])
-        rssiStreams[monitorID]?.finish()
-        rssiStreams.removeValue(forKey: monitorID)
-    }
-    
-    /// Read RSSI value once
-    public func readRSSI() throws {
+    /// Read RSSI (signal strength) value from the peripheral
+    public func readRSSI(timeout: TimeInterval? = nil) async throws -> Int {
         guard cbPeripheral.state == .connected else {
             logger?.errorError("Cannot read RSSI: peripheral not connected", context: [
                 "peripheralID": identifier.uuidString
@@ -514,11 +491,46 @@ public final class ConnectedPeripheral {
             throw BluetoothError.peripheralNotConnected
         }
         
+        // Cancel any existing RSSI read operation
+        if let existingRead = rssiReadOperation {
+            logger?.peripheralInfo("Canceling previous RSSI read to start new one", context: [
+                "peripheralID": identifier.uuidString
+            ])
+            existingRead.resumeOnce(with: .failure(BluetoothError.operationCancelled))
+            rssiReadOperation = nil
+        }
+        
         logger?.peripheralInfo("Reading RSSI", context: [
-            "peripheralID": identifier.uuidString
+            "peripheralID": identifier.uuidString,
+            "timeout": timeout as Any
         ])
         
-        cbPeripheral.readRSSI()
+        return try await withCheckedThrowingContinuation { continuation in
+            let read = TimedOperation<Int>(
+                operationName: "RSSI read",
+                logger: logger
+            )
+            read.setup(continuation)
+            rssiReadOperation = read
+            
+            if let timeout {
+                logger?.internalDebug("Setting RSSI read timeout", context: [
+                    "timeout": timeout
+                ])
+                read.setTimeoutTask(timeout: timeout, onTimeout: { [weak self] in
+                    guard let self else { return }
+                    self.logger?.logTimeout(
+                        operation: "RSSI read",
+                        timeout: timeout,
+                        context: ["peripheralID": self.identifier.uuidString]
+                    )
+                    self.rssiReadOperation = nil
+                })
+            }
+            
+            logger?.internalDebug("Calling CBPeripheral.readRSSI")
+            cbPeripheral.readRSSI()
+        }
     }
     
     // MARK: - Convenience Methods
@@ -728,21 +740,24 @@ public final class ConnectedPeripheral {
     
     // Called by delegate proxy when RSSI is read
     internal func handleRSSIUpdate(rssi: NSNumber, error: Error?) {
-        if let error = error {
-            logger?.errorError("RSSI read failed", context: [
-                "peripheralID": identifier.uuidString,
-                "error": error.localizedDescription
-            ])
-        } else {
-            let rssiValue = rssi.intValue
-            logger?.peripheralInfo("RSSI updated", context: [
-                "peripheralID": identifier.uuidString,
-                "rssi": rssiValue
-            ])
+        logger?.internalDebug("Processing RSSI read response")
+        
+        if let read = rssiReadOperation {
+            rssiReadOperation = nil
             
-            // Notify all RSSI streams
-            for continuation in rssiStreams.values {
-                continuation.yield(rssiValue)
+            if let error = error {
+                logger?.errorError("RSSI read failed", context: [
+                    "peripheralID": identifier.uuidString,
+                    "error": error.localizedDescription
+                ])
+                read.resumeOnce(with: .failure(error))
+            } else {
+                let rssiValue = rssi.intValue
+                logger?.peripheralInfo("RSSI read completed", context: [
+                    "peripheralID": identifier.uuidString,
+                    "rssi": rssiValue
+                ])
+                read.resumeOnce(with: .success(rssiValue))
             }
         }
     }
@@ -784,6 +799,12 @@ public final class ConnectedPeripheral {
             cancelledCount += 1
         }
         notificationStateOperations.removeAll()
+        
+        if rssiReadOperation != nil {
+            rssiReadOperation?.cancel()
+            rssiReadOperation = nil
+            cancelledCount += 1
+        }
         
         logger?.internalInfo("All pending operations cancelled", context: [
             "peripheralID": identifier.uuidString,

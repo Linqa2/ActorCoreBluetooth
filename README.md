@@ -335,96 +335,33 @@ func monitorConnectionState(central: BluetoothCentral, peripheralID: UUID) async
 
 ### RSSI Monitoring
 
-Monitor signal strength (RSSI) in real-time to track connection quality:
+Read signal strength (RSSI) values to check connection quality:
 
 ```swift
 @MainActor
-func monitorRSSI(peripheral: ConnectedPeripheral) async throws {
-    // Create RSSI monitoring stream
-    let (rssiStream, monitorID) = peripheral.createRSSIMonitor()
-    
-    // Important: Ensure proper cleanup
-    defer {
-        peripheral.stopRSSIMonitoring(monitorID)
-    }
-    
-    // Start monitoring in a task
-    Task {
-        for await rssi in rssiStream {
-            print("RSSI: \(rssi) dBm")
-            
-            // Interpret signal strength
-            if rssi > -50 {
-                print("Excellent signal")
-            } else if rssi > -70 {
-                print("Good signal")
-            } else if rssi > -85 {
-                print("Fair signal")
-            } else {
-                print("Weak signal")
-            }
-        }
-    }
-    
-    // Trigger RSSI reads periodically
-    while true {
-        try peripheral.readRSSI()
-        try await Task.sleep(for: .seconds(1))
-    }
-}
-
-// Example: One-time RSSI read
-@MainActor
 func checkSignalStrength(peripheral: ConnectedPeripheral) async throws {
-    let (rssiStream, monitorID) = peripheral.createRSSIMonitor()
+    // Read RSSI value with timeout
+    let rssi = try await peripheral.readRSSI(timeout: 3.0)
+    print("Current signal strength: \(rssi) dBm")
     
-    defer {
-        peripheral.stopRSSIMonitoring(monitorID)
-    }
-    
-    // Trigger a single read
-    try peripheral.readRSSI()
-    
-    // Wait for the result
-    if let rssi = await rssiStream.first(where: { _ in true }) {
-        print("Current signal strength: \(rssi) dBm")
+    // Interpret signal strength
+    if rssi > -50 {
+        print("Excellent signal")
+    } else if rssi > -70 {
+        print("Good signal")
+    } else if rssi > -85 {
+        print("Fair signal")
+    } else {
+        print("Weak signal")
     }
 }
 
-// Example: Track connection quality over time
+// Example: Read RSSI periodically
 @MainActor
-func trackConnectionQuality(peripheral: ConnectedPeripheral) async throws {
-    let (rssiStream, monitorID) = peripheral.createRSSIMonitor()
-    
-    defer {
-        peripheral.stopRSSIMonitoring(monitorID)
-    }
-    
-    var rssiHistory: [Int] = []
-    let maxHistorySize = 10
-    
-    // Monitor RSSI updates
-    Task {
-        for await rssi in rssiStream {
-            rssiHistory.append(rssi)
-            if rssiHistory.count > maxHistorySize {
-                rssiHistory.removeFirst()
-            }
-            
-            // Calculate average signal strength
-            let average = rssiHistory.reduce(0, +) / rssiHistory.count
-            print("Current: \(rssi) dBm, Average: \(average) dBm")
-            
-            // Warn if signal is deteriorating
-            if average < -85 {
-                print("⚠️ Warning: Connection quality is poor")
-            }
-        }
-    }
-    
-    // Read RSSI every 2 seconds
-    while true {
-        try peripheral.readRSSI()
+func monitorRSSI(peripheral: ConnectedPeripheral) async throws {
+    for _ in 0..<10 {
+        let rssi = try await peripheral.readRSSI(timeout: 3.0)
+        print("RSSI: \(rssi) dBm")
         try await Task.sleep(for: .seconds(2))
     }
 }
