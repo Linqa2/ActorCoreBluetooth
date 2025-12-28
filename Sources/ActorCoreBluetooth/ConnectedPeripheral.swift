@@ -25,6 +25,7 @@ public final class ConnectedPeripheral {
     private var characteristicReadOperations: [String: TimedOperation<Data?>] = [:]
     private var characteristicWriteOperations: [String: TimedOperation<Void>] = [:]
     private var notificationStateOperations: [String: TimedOperation<Void>] = [:]
+    private var rssiReadOperation: TimedOperation<Int>?
     
     // Stream management for peripheral-level events
     private var serviceDiscoveryStreams: [UUID: AsyncStream<[BluetoothService]>.Continuation] = [:]
@@ -479,6 +480,59 @@ public final class ConnectedPeripheral {
         notificationStreams.removeValue(forKey: monitorID)
     }
     
+    // MARK: - RSSI Operations
+    
+    /// Read RSSI (signal strength) value from the peripheral
+    public func readRSSI(timeout: TimeInterval? = nil) async throws -> Int {
+        guard cbPeripheral.state == .connected else {
+            logger?.errorError("Cannot read RSSI: peripheral not connected", context: [
+                "peripheralID": identifier.uuidString
+            ])
+            throw BluetoothError.peripheralNotConnected
+        }
+        
+        // Cancel any existing RSSI read operation
+        if let existingRead = rssiReadOperation {
+            logger?.peripheralInfo("Canceling previous RSSI read to start new one", context: [
+                "peripheralID": identifier.uuidString
+            ])
+            existingRead.resumeOnce(with: .failure(BluetoothError.operationCancelled))
+            rssiReadOperation = nil
+        }
+        
+        logger?.peripheralInfo("Reading RSSI", context: [
+            "peripheralID": identifier.uuidString,
+            "timeout": timeout as Any
+        ])
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            let read = TimedOperation<Int>(
+                operationName: "RSSI read",
+                logger: logger
+            )
+            read.setup(continuation)
+            rssiReadOperation = read
+            
+            if let timeout {
+                logger?.internalDebug("Setting RSSI read timeout", context: [
+                    "timeout": timeout
+                ])
+                read.setTimeoutTask(timeout: timeout, onTimeout: { [weak self] in
+                    guard let self else { return }
+                    self.logger?.logTimeout(
+                        operation: "RSSI read",
+                        timeout: timeout,
+                        context: ["peripheralID": self.identifier.uuidString]
+                    )
+                    self.rssiReadOperation = nil
+                })
+            }
+            
+            logger?.internalDebug("Calling CBPeripheral.readRSSI")
+            cbPeripheral.readRSSI()
+        }
+    }
+    
     // MARK: - Convenience Methods
     
     /// Full service and characteristic discovery
@@ -684,6 +738,30 @@ public final class ConnectedPeripheral {
         }
     }
     
+    // Called by delegate proxy when RSSI is read
+    internal func handleRSSIUpdate(rssi: NSNumber, error: Error?) {
+        logger?.internalDebug("Processing RSSI read response")
+        
+        if let read = rssiReadOperation {
+            rssiReadOperation = nil
+            
+            if let error = error {
+                logger?.errorError("RSSI read failed", context: [
+                    "peripheralID": identifier.uuidString,
+                    "error": error.localizedDescription
+                ])
+                read.resumeOnce(with: .failure(error))
+            } else {
+                let rssiValue = rssi.intValue
+                logger?.peripheralInfo("RSSI read completed", context: [
+                    "peripheralID": identifier.uuidString,
+                    "rssi": rssiValue
+                ])
+                read.resumeOnce(with: .success(rssiValue))
+            }
+        }
+    }
+    
     /// Cancel all pending operations - called during disconnection
     internal func cancelAllPendingOperations() {
         logger?.peripheralInfo("Cancelling all pending operations due to disconnection", context: [
@@ -721,6 +799,12 @@ public final class ConnectedPeripheral {
             cancelledCount += 1
         }
         notificationStateOperations.removeAll()
+        
+        if rssiReadOperation != nil {
+            rssiReadOperation?.cancel()
+            rssiReadOperation = nil
+            cancelledCount += 1
+        }
         
         logger?.internalInfo("All pending operations cancelled", context: [
             "peripheralID": identifier.uuidString,
@@ -780,5 +864,12 @@ private final class ConnectedPeripheralDelegateProxy: NSObject, @preconcurrency 
             "characteristicUUID": characteristic.uuid.uuidString
         ])
         self.peripheral?.handleNotificationStateUpdate(for: characteristic, error: error)
+    }
+    
+    func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
+        logger?.internalDebug("CBPeripheralDelegate.didReadRSSI called", context: [
+            "rssi": RSSI.intValue
+        ])
+        self.peripheral?.handleRSSIUpdate(rssi: RSSI, error: error)
     }
 }
