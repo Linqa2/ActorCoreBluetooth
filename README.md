@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
 [![CI](https://github.com/Linqa2/ActorCoreBluetooth/actions/workflows/ci.yml/badge.svg)](https://github.com/Linqa2/ActorCoreBluetooth/actions)
 
-**⚠️ v0.1.0-alpha - APIs may change**
+**⚠️ v0.1.1-alpha - APIs may change**
 
 A modern Swift Bluetooth library providing async/await APIs for CoreBluetooth using MainActor isolation. Built for Swift 6 with strict concurrency compliance and comprehensive logging.
 
