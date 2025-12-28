@@ -433,14 +433,14 @@ Add this to your `Package.swift` file:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/Linqa2/ActorCoreBluetooth.git", exact: "v0.1.0-alpha")
+    .package(url: "https://github.com/Linqa2/ActorCoreBluetooth.git", exact: "v0.1.1-alpha")
 ]
 ```
 
 Or add it through Xcode:
 1. File → Add Package Dependencies
 2. Enter: `https://github.com/Linqa2/ActorCoreBluetooth.git`
-3. Select version: `v0.1.0-alpha`
+3. Select version: `v0.1.1-alpha`
 
 ## Requirements
 
