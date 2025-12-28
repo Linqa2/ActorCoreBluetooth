@@ -29,7 +29,7 @@ A modern Swift Bluetooth library providing async/await APIs for CoreBluetooth us
 - **Data Reading**: Characteristic value reading with timeout support
 - **Data Writing**: Both response-required and fire-and-forget writing
 - **Notifications**: Real-time characteristic value notifications
-- **RSSI Monitoring**: Real-time signal strength monitoring with streaming support
+- **RSSI Reading**: RSSI value reading with timeout support
 - **Real-time Monitoring**: Live streams for connection states and characteristic updates
 
 ## Platform Support
@@ -333,7 +333,7 @@ func monitorConnectionState(central: BluetoothCentral, peripheralID: UUID) async
 }
 ```
 
-### RSSI Monitoring
+### RSSI Reading
 
 Read signal strength (RSSI) values to check connection quality:
 
