@@ -437,6 +437,67 @@ public final class BluetoothCentral {
         try await disconnect(peripheral.identifier, timeout: timeout)
     }
     
+    /// Retrieve and connect to peripherals that are already connected at the system level
+    /// This is useful for peripherals connected by other apps or the system
+    public func retrieveConnectedPeripherals(
+        withServices services: [String],
+        timeout: TimeInterval? = nil
+    ) async throws -> [ConnectedPeripheral] {
+        try await ensureCentralManagerInitialized()
+        
+        guard let cbCentralManager = cbCentralManager else {
+            logger?.errorError("Cannot retrieve connected peripherals: CBCentralManager not initialized")
+            throw BluetoothError.centralManagerNotInitialized
+        }
+        
+        let cbServices = services.compactMap { CBUUID(string: $0) }
+        let serviceInfo = services.joined(separator: ", ")
+        
+        logger?.centralInfo("Retrieving system-connected peripherals", context: [
+            "services": serviceInfo,
+            "timeout": timeout as Any
+        ])
+        
+        let cbPeripherals = cbCentralManager.retrieveConnectedPeripherals(withServices: cbServices)
+        
+        logger?.centralDebug("Found system-connected peripherals", context: [
+            "count": cbPeripherals.count,
+            "peripherals": cbPeripherals.map { $0.name ?? $0.identifier.uuidString }.joined(separator: ", ")
+        ])
+        
+        guard !cbPeripherals.isEmpty else {
+            logger?.centralInfo("No system-connected peripherals found for specified services")
+            return []
+        }
+        
+        var connectedPeripherals: [ConnectedPeripheral] = []
+        
+        for cbPeripheral in cbPeripherals {
+            do {
+                let connected = try await connectToRetrievedPeripheral(
+                    cbPeripheral,
+                    originalName: cbPeripheral.name,
+                    timeout: timeout
+                )
+                connectedPeripherals.append(connected)
+            } catch {
+                logger?.connectionWarning("Failed to connect to system-connected peripheral", context: [
+                    "peripheralName": cbPeripheral.name ?? "Unknown",
+                    "peripheralID": cbPeripheral.identifier.uuidString,
+                    "error": error.localizedDescription
+                ])
+                // Continue with other peripherals rather than failing entirely
+            }
+        }
+        
+        logger?.centralNotice("Retrieved connected peripherals", context: [
+            "requested": cbPeripherals.count,
+            "successful": connectedPeripherals.count
+        ])
+        
+        return connectedPeripherals
+    }
+    
     /// Get list of currently connected peripheral IDs
     public var connectedPeripheralIDs: [UUID] {
         let ids = Array(connectedPeripherals.keys)
