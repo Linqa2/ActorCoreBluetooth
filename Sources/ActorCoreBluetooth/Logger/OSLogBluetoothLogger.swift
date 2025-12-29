@@ -28,7 +28,7 @@ public final class OSLogBluetoothLogger: BluetoothLogger {
             "\(key): \(value)"
         }.joined(separator: ", ") ?? ""
         
-        let fullMessage = "\(message)\(contextString)"
+        let fullMessage = "\(message) \(contextString)"
         
         switch level {
         case .debug:
