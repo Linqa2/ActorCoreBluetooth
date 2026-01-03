@@ -425,6 +425,35 @@ func setupLogging() {
 }
 ```
 
+## Advanced Features
+
+### Escape Hatch: Accessing CoreBluetooth Objects
+
+For advanced use cases, you can access underlying CoreBluetooth objects directly:
+
+```swift
+@MainActor
+func useEscapeHatch() async throws {
+    let central = BluetoothCentral()
+    let devices = try await central.scanForPeripherals(timeout: 5.0)
+    guard let device = devices.first else { return }
+    let peripheral = try await central.connect(device, timeout: 10.0)
+    
+    // Access underlying CBPeripheral
+    let cbPeripheral = peripheral.underlyingPeripheral()
+    let maxWriteLength = cbPeripheral.maximumWriteValueLength(for: .withResponse)
+}
+```
+
+**Available methods:**
+- `underlyingCentralManager()` → `CBCentralManager?`
+- `underlyingPeripheral(for:)` → `CBPeripheral?` 
+- `underlyingPeripheral()` → `CBPeripheral`
+- `underlyingService()` → `CBService`
+- `underlyingCharacteristic()` → `CBCharacteristic`
+
+⚠️ **Warning**: Bypasses actor-based safety. Don't modify delegates or use for primary API operations.
+
 ## Installation
 
 ### Swift Package Manager

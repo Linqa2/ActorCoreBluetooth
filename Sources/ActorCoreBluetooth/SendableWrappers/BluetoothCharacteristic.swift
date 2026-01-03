@@ -23,4 +23,12 @@ public struct BluetoothCharacteristic: Sendable {
         self.value = cbCharacteristic.value
         self.cbCharacteristic = Unchecked(cbCharacteristic)
     }
+    
+    // MARK: - Escape Hatch: CoreBluetooth Object Access
+    
+    /// Access the underlying CBCharacteristic for advanced use cases.
+    /// - Warning: Bypasses actor-based safety.
+    public func underlyingCharacteristic() -> CBCharacteristic {
+        return cbCharacteristic.value
+    }
 }

@@ -25,4 +25,12 @@ public struct DiscoveredPeripheral: Sendable {
         self.advertisementData = AdvertisementData(cbAdvertisementData: advertisementData)
         self.cbPeripheral = Unchecked(cbPeripheral)
     }
+    
+    // MARK: - Escape Hatch: CoreBluetooth Object Access
+    
+    /// Access the underlying CBPeripheral for advanced use cases.
+    /// - Warning: Bypasses actor-based safety. Don't modify delegates.
+    public func underlyingPeripheral() -> CBPeripheral {
+        return cbPeripheral.value
+    }
 }
