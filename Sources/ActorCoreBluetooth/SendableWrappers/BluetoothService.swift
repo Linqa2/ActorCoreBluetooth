@@ -23,4 +23,12 @@ public struct BluetoothService: Sendable {
         self.characteristics = characteristics
         self.cbService = Unchecked(cbService)
     }
+    
+    // MARK: - Escape Hatch: CoreBluetooth Object Access
+    
+    /// Access the underlying CBService for advanced use cases.
+    /// - Warning: Bypasses actor-based safety.
+    public func underlyingService() -> CBService {
+        return cbService.value
+    }
 }

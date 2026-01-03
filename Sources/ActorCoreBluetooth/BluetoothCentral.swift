@@ -644,6 +644,20 @@ public final class BluetoothCentral {
         logger?.centralNotice("BluetoothCentral cleanup completed")
     }
     
+    // MARK: - Escape Hatch: CoreBluetooth Object Access
+    
+    /// Access the underlying CBCentralManager for advanced use cases.
+    /// - Warning: Bypasses actor-based safety. Don't modify delegates.
+    public func underlyingCentralManager() -> CBCentralManager? {
+        return cbCentralManager
+    }
+    
+    /// Access the underlying CBPeripheral for a connected peripheral.
+    /// - Warning: Bypasses actor-based safety. Don't modify delegates.
+    public func underlyingPeripheral(for peripheralID: UUID) -> CBPeripheral? {
+        return connectedPeripherals[peripheralID]
+    }
+    
     // MARK: - Internal Delegate Handling Methods
     
     /// Handle peripheral state changes, managing both operation completion and state monitoring

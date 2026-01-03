@@ -570,6 +570,14 @@ public final class ConnectedPeripheral {
         return servicesWithCharacteristics
     }
     
+    // MARK: - Escape Hatch: CoreBluetooth Object Access
+    
+    /// Access the underlying CBPeripheral for advanced use cases.
+    /// - Warning: Bypasses actor-based safety. Don't modify delegates.
+    public func underlyingPeripheral() -> CBPeripheral {
+        return cbPeripheral
+    }
+    
     // MARK: - Internal Delegate Handling Methods
     
     // Called by delegate proxy when services are discovered
